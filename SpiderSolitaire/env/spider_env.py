@@ -8,11 +8,12 @@ from IPython.display import clear_output
 
 import sys
 from pathlib import Path
-# adjust '..' to point to your repository root that contains the SpiderSolitaire package
-sys.path.insert(0, str(Path('..').resolve()))
+# Ensure repository root (RL) is on sys.path regardless of current working directory
+repo_root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(repo_root))
 
-from utils.io import timed_input
-from env.spider_space import SpiderSpace
+from SpiderSolitaire.utils.io import timed_input
+from SpiderSolitaire.env.spider_space import SpiderSpace
 
 class SpiderEnv(gym.Env):
     """Introduction (Wikipedia):
@@ -58,7 +59,7 @@ class SpiderEnv(gym.Env):
     def __init__(self, n_suits: int=4, n_actions_limit:int=None, 
                  vectorize_obs: bool=False,
                  mask_legal_actions:bool=False,
-                 rewards_policy: dict[str, float]=None,
+                 rewards_policy: dict[str, float|int]=None,
                  rewards_limits:dict[str, float]=None,
                  _render_state_timeout:int=None, _diagnostics_mode:bool=False,
                  _maxsize: int = 64, _dtype=np.int8):
@@ -92,9 +93,9 @@ class SpiderEnv(gym.Env):
 
         self._render_state_timeout, self._diagnostics_mode =_render_state_timeout, _diagnostics_mode
 
-        self.episode_over = False
+        self._episode_over = False
 
-        self.mask_legal_actions = mask_legal_actions
+        self._mask_legal_actions = mask_legal_actions
 
         if rewards_policy is not None:
             self.rewards_policy = {**SpiderEnv.DEFAULT_REWARDS ,**rewards_policy}
@@ -111,7 +112,7 @@ class SpiderEnv(gym.Env):
         """resets the environment to initial state and randomly generates a new game"""
         super().reset(seed=seed) # np_seed
 
-        self.episode_over = False
+        self._episode_over = False
         
         self._actions_counter = 0
         self._complete_sequences = 0
@@ -153,11 +154,15 @@ class SpiderEnv(gym.Env):
         return obs_state
         
     def get_info(self) -> dict[str,typing.Any]:
+        """Returns auxiliary information about the current environment state. 
+        The following keys, which correspond to env internal state variables, are always present: 'n_complete_sequences', 'n_facedown_tableu_cards', '_stock_len'.
+        If `_mask_legal_actions` parameter was set to True when the environment was created, the 'action_mask' key is also present.
+        """
         d = {'n_complete_sequences' : self._complete_sequences,
             'n_facedown_tableu_cards': self._facedown_tableu_cards,
-            'n_remaining_stock_cards': self._stock_len
+            '_stock_len': self._stock_len
         }
-        if self.mask_legal_actions:
+        if self._mask_legal_actions:
              d['action_mask'] = self.get_action_mask()
         return d
 
@@ -234,13 +239,13 @@ class SpiderEnv(gym.Env):
             
     def step(self, action:int,
             __N_TARGETS=N_TARGETS, __NONCARD_VALUE=NONCARD_VALUE, 
-            __NOOP_ACTION=NOOP_ACTION)-> tuple:
+            __NOOP_ACTION=NOOP_ACTION)-> tuple[npt.NDArray[np.integer], float, bool, bool, dict[str,typing.Any]]:
         """
         Executes action in the environment.
         """
         assert self._complete_sequences < __N_TARGETS #and (self._actions_limit is None or self._actions_limit is not None and self._actions_limit-self._actions_counter>=-1)
 
-        if self.episode_over:
+        if self._episode_over:
             obs, info = self.reset()
             if self._actions_limit is not None and 0<self._actions_limit==self._actions_counter:
                 return obs, 0.0, False, True, info
@@ -267,7 +272,7 @@ class SpiderEnv(gym.Env):
     
             #the game is finished once all the sequences are collected (8) or max number of actions is reached
             #done = sum(self._complete_sequences.values()) == __N_TARGETS or self.n_actions_limit is not None and self._actions_counter==self.n_actions_limit
-            terminated = truncated or (self._complete_sequences == __N_TARGETS) & action==__NOOP_ACTION 
+            terminated = truncated or (self._complete_sequences == __N_TARGETS) # action==__NOOP_ACTION 
 
             
             # reward will be based on number of completed sequences            
@@ -303,13 +308,17 @@ class SpiderEnv(gym.Env):
                 print(f"terminated: {terminated}, truncated: {truncated}")
                 #print(f"Vectorized state: {SpiderSpace._vectorize(self._internal_state)}")
 
-            self.episode_over = terminated or truncated
+            self._episode_over = terminated or truncated
             return obs, reward, terminated, truncated, info
 
     def get_game_status(self,__N_TARGETS= N_TARGETS)-> bool:
         """Returns True if game is won, False otherwise"""
         return self._complete_sequences==__N_TARGETS
-        
+    
+    def is_masked_actions(self) -> bool:
+        """Returns True if legal actions masking is enabled, False otherwise"""
+        return self._mask_legal_actions
+
     ##############################################
     # possible actions function 
     # each returns True if action is valie, else False
@@ -418,8 +427,8 @@ class SpiderEnv(gym.Env):
         else:
             raise NotImplementedError(f'Action space shape is multidimensional')
             
-    def _sample_valid_action(self):
-        """Samples a valid random action"""
+    def sample_valid_action(self):
+        """Samples a valid random action. An alternative to `env.action_space.sample()` which may return invalid actions."""
         return np.random.choice(np.nonzero(self.get_action_mask())[0])
         
     # @njit(inline='always')
@@ -799,7 +808,7 @@ class SpiderEnv(gym.Env):
             Returns True if all the N_TARGETS sequences were completed (victory), False otherwise. """
         cum_rew = 0
 
-        action_sampler = self._sample_valid_action if _sample_valid_actions_only else  self.action_space.sample
+        action_sampler = self.sample_valid_action if _sample_valid_actions_only else  self.action_space.sample
         
         for game_iter in range(n_max_iterations):
             a = action_sampler()
