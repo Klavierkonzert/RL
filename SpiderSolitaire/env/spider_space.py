@@ -70,13 +70,14 @@ class SpiderSpace(gym.spaces.Box):
         
         #self.low, self.high = SpiderSpace.LOWEST_CARD + SpiderSpace.HIDE_VALUE, SpiderSpace.HIGHEST_CARD
     
-    def sample(self, hide_cards: bool=True,
+    def sample(self, rng=None, hide_cards: bool=True,
                __LOWEST_CARD=LOWEST_CARD, __HIGHEST_RANK=HIGHEST_RANK, __HIGHEST_CARD=HIGHEST_CARD, __NONCARD_VALUE=NONCARD_VALUE, __N_CARDS=N_CARDS, __CARDS_RANGE=-LOWEST_CARD+HIGHEST_RANK+1,
                __N_STOCK_CARDS=N_STOCK_CARDS, __N_PILES=N_PILES, __HIDE_VALUE=HIDE_VALUE,  
                __I_STOCK_PILE=I_STOCK_PILE, __I_FACEDOWN_CNTS=I_FACEDOWN_CNTS, __I_DEPTHS_CNTS=I_DEPTHS_CNTS,
                __DTYPE=DTYPE) -> npt.NDArray[np.integer]:
         """Generates a valid Spider preset in the form [n_piles, max_cards_per_pile].
             :params:
+                rng: numpy random generator. If None, self.np_random is used. Should be passed when called by SpiderEnv to ensure reproducibility.
                 hide_cards: if True, the cards in the stock pile (the last row) and the cards other than last in the tableau piles are considered as face-down, i.e. invisible to an agent. This is done by subtracting the HIGHEST_CARD.
                 facedown_counts: if True, the last row[:N_PILES] in the returned numpy array is reserved to store counts of facedown cards in the tableau piles and stock pile (50). In the beginning of a game the counts are expected to be as follows: 6,6,6,6,5,5,5...,5, 50
             :returns:
@@ -84,7 +85,12 @@ class SpiderSpace(gym.spaces.Box):
         #cards are represented by integers
         cards = np.arange(__LOWEST_CARD, self.n_suits*__HIGHEST_RANK +1, dtype=__DTYPE)
         cards = np.hstack([cards] * (__N_CARDS//(self.n_suits* __CARDS_RANGE)))
-        np.random.shuffle(cards)
+
+        if rng is None:
+            self.np_random.shuffle(cards) # not np.random.shuffle(cards)
+        else:
+            rng.shuffle(cards)
+
         empty_space = np.full(self.shape[:2], __NONCARD_VALUE, dtype=__DTYPE)
 
         n_undealt_cards = __N_STOCK_CARDS
@@ -185,19 +191,18 @@ class SpiderSpace(gym.spaces.Box):
     @staticmethod
     def _pad_matrix(matrix, arithmetic_axis:int=1, 
                     __NONCARD_VALUE=NONCARD_VALUE):
+        """Pads the input matrix with one column/row of `NONCARD_VALUE`s (zeros) at the end along the arithmetic_axis (1 for 2D matrices, 0 for 1D arrays)"""
         return np.pad(matrix,  
                       [(0,0)]*arithmetic_axis + [(0,1)] + [(0,0)]*(matrix.ndim-arithmetic_axis-1), constant_values=__NONCARD_VALUE)
     @staticmethod
     def _get_top_cards_indices(tableau_piles: npt.NDArray[np.integer],
                               _return_difference: bool=False,
                                 __NONCARD_VALUE=NONCARD_VALUE) -> npt.NDArray[np.integer]:
-        """this method could be useful...
-                returns positions of sequences (1 card or elements of ordered sequences) which can be moved to another pile.
+        """ Returns top cards indices per each pile [empty piles are omitted].
                 The output is `np.array` of shape `(N_PILES,)`
-            params:
-                tableau_piles: the first N_PILES of game state (tableau piles)
-                _return_difference: if True, the function returns the tuple `(cards_indices, differences)`, where `differences` represents shifted differences between cards per each pile. The latter is used by `_get_max_sequences_depths(tableau_piles)` function.
-                Example:
+            :params:
+                - tableau_piles: the first N_PILES of game state (tableau piles)
+            :Example:
                 >>> SpiderSpace._get_top_cards_indices(np.array([[1,4,3,15,14,13,12,0,0],
                             [1,4,3,16,15,13,12,0,0],
                               [1,4,3,2,16,15,14,0,0],
@@ -208,16 +213,26 @@ class SpiderSpace(gym.spaces.Box):
                               [1,4,9,9,5,4,3,-2,9]]))
                 (array([0, 1, 2, 3, 5, 6, 7]), array([6, 6, 6, 2, 2, 2, 8]))
         """
-        #determining arithmetic axis
-        ar_axis = int(len(tableau_piles.shape)>1) #0 if tableau_piles is 1D array, 1 otherwise
-        #difference between cards per each pile (to detect ascending sequences (-1))
-        padded_tableau = SpiderSpace._pad_matrix(tableau_piles, ar_axis) 
-        d = np.diff(padded_tableau, axis=ar_axis)# will be truncated
-        idc_topcards = np.nonzero(d - __NONCARD_VALUE)
+        ## old implementation:
+        ## param: _return_difference: bool=False, if True, the function returns the tuple `(cards_indices, differences)`, where `differences` represents shifted differences between cards per each pile. The latter is used by `_get_max_sequences_depths(tableau_piles)` function.
+        # #determining arithmetic axis
+        # ar_axis = int(len(tableau_piles.shape)>1) #0 if tableau_piles is 1D array, 1 otherwise
+        # #difference between cards per each pile (to detect ascending sequences (-1))
+        # padded_tableau = SpiderSpace._pad_matrix(tableau_piles, ar_axis) 
+        # d = np.diff(padded_tableau, axis=ar_axis)# will be truncated
+        # idc_topcards = np.nonzero(d - __NONCARD_VALUE)
     
-        mask = np.append(np.diff(idc_topcards[0]), 1).astype(bool) 
-        bnd_coords = tuple(bnd_ax[mask] for bnd_ax in idc_topcards)
-        return bnd_coords if not _return_difference else (bnd_coords, d)#[:,:-1])
+        # mask = np.append(np.diff(idc_topcards[0]), 1).astype(bool) 
+        # bnd_coords = tuple(bnd_ax[mask] for bnd_ax in idc_topcards)
+        # return bnd_coords if not _return_difference else (bnd_coords, d)#[:,:-1])
+
+        #new implementation:
+        idc_nonzero = np.nonzero(tableau_piles)
+        if len(idc_nonzero[0]):
+            d = np.append(np.diff(idc_nonzero)[0].astype(bool), True)
+            return tuple(idc_nonzero[i][d] for i in range(len(idc_nonzero)))
+        else:# empty tableau
+            return idc_nonzero
         
     @staticmethod
     def _get_max_sequences_depths(tableau_piles: npt.NDArray[np.integer],
