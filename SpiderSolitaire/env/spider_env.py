@@ -89,7 +89,7 @@ class SpiderEnv(gym.Env):
         self._actions_counter=0
             
         self._stock_len = SpiderSpace.N_STOCK_CARDS
-        self._facedown_tableu_cards=SpiderSpace.N_FACEDOWN_CARDS
+        self._facedown_tableau_cards=SpiderSpace.N_FACEDOWN_CARDS
 
         self._render_state_timeout, self._diagnostics_mode =_render_state_timeout, _diagnostics_mode
 
@@ -97,6 +97,7 @@ class SpiderEnv(gym.Env):
 
         self._mask_legal_actions = mask_legal_actions
 
+        ################ rewards ##################################
         if rewards_policy is not None:
             self.rewards_policy = {**SpiderEnv.DEFAULT_REWARDS ,**rewards_policy}
         else:
@@ -105,6 +106,10 @@ class SpiderEnv(gym.Env):
         if rewards_limits is not None:
             # if set, rewards are extracted every time from these limits
             self.rewards_limits=rewards_limits
+        ###################################################################
+
+        ## introduced to avoid heavy recalculations of actuons mask
+        #self._actions_mask = np.zeros(self.action_space.n, dtype=bool)
 
     def reset(self,seed: int|None=None, options=None,
               __N_STOCK_CARDS = SpiderSpace.N_STOCK_CARDS, __N_FACEDOWN_CARDS=SpiderSpace.N_FACEDOWN_CARDS
@@ -117,14 +122,16 @@ class SpiderEnv(gym.Env):
         self._actions_counter = 0
         self._complete_sequences = 0
         
-        self.observation_space.seed(seed)
-        self._internal_state = self.observation_space.sample(hide_cards = True)
+        self._internal_state = self.observation_space.sample(self.np_random, hide_cards = True)
         
         self._tableau_piles, self._stock_pile, self.counts, self.seq_depths = self._unpack_state(self._internal_state)
         
         self._stock_len = __N_STOCK_CARDS
-        self._facedown_tableu_cards=__N_FACEDOWN_CARDS
+        self._facedown_tableau_cards=__N_FACEDOWN_CARDS
         
+
+        #self._action_mask = self._get_action_mask()
+
         #initial visible observation
         obs = self.get_obs()
         info = self.get_info()
@@ -155,11 +162,11 @@ class SpiderEnv(gym.Env):
         
     def get_info(self) -> dict[str,typing.Any]:
         """Returns auxiliary information about the current environment state. 
-        The following keys, which correspond to env internal state variables, are always present: 'n_complete_sequences', 'n_facedown_tableu_cards', '_stock_len'.
+        The following keys, which correspond to env internal state variables, are always present: 'n_complete_sequences', 'n_facedown_tableau_cards', '_stock_len'.
         If `_mask_legal_actions` parameter was set to True when the environment was created, the 'action_mask' key is also present.
         """
         d = {'n_complete_sequences' : self._complete_sequences,
-            'n_facedown_tableu_cards': self._facedown_tableu_cards,
+            'n_facedown_tableau_cards': self._facedown_tableau_cards,
             '_stock_len': self._stock_len
         }
         if self._mask_legal_actions:
@@ -178,26 +185,32 @@ class SpiderEnv(gym.Env):
                     __N_TARGETS=N_TARGETS, __NONCARD_VALUE=NONCARD_VALUE, 
                     __MOVE_ACTIONS_RANGE=MOVE_ACTIONS_RANGE, __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION
                    ) -> float:
-
+        """Accumulates rewards for changing game state based on the following indicators:
+                - number of comleted sequences
+                - extended sequences (if one of sequences increased)
+                - one of piles become free
+                - when dealing cards (punishment)
+                """
         reward= 0
         if action is not None:
             if n_completed_seqs:
                 reward += self.rewards_policy['complete sequence']*(n_completed_seqs)
                     
             reward += self.rewards_policy['discover card']*(init_facedown_cnts - facedown_counts[:__N_TARGETS]).sum()
-            if action<=__MOVE_ACTIONS_RANGE: #if not deal cards action
-                # seq depth is increased
-                reward += self.rewards_policy['extend sequence']*(init_depths - seq_depths).sum()
+            #if action<=__MOVE_ACTIONS_RANGE: #if not deal cards action
+            # IF seq depth is increased
+            diff_depths = init_depths - seq_depths
+            reward += self.rewards_policy['extend sequence'] * diff_depths.sum() if np.all(diff_depths>0) else 0
                 
-                # reward for freeing a pile
-                tab_cards = np.count_nonzero(tableau_piles-__NONCARD_VALUE, axis=1)
-                n_freed_piles = ((tab_cards==0) & (tab_cards-init_tableau_cards<1)).sum()
+            # reward for freeing a pile
+            tab_cards = np.count_nonzero(tableau_piles-__NONCARD_VALUE, axis=1)
+            n_freed_piles = ((tab_cards==0) & (tab_cards-init_tableau_cards<1)).sum()
                 
-                ##_extend_sequence_reward coulbe used here
-                #reward+= self.rewards_policy["free pile"]*n_freed_piles
-                ##to inttroduce this reward, prevent an agent from moving sequences back and forth
+            ##_extend_sequence_reward coulbe used here
+            #reward+= self.rewards_policy["free pile"]*n_freed_piles
+            ##to inttroduce this reward, prevent an agent from moving sequences back and forth
 
-            elif action==__DEAL_CARDS_ACTION and "deal cards" in self.rewards_policy and self.rewards_policy["deal cards"]!=0:
+            if action==__DEAL_CARDS_ACTION and "deal cards" in self.rewards_policy and self.rewards_policy["deal cards"]!=0:
                 # punish for dealing cards:
                 coefff =  self.rewards_policy["deal cards"]
                 if type(coefff)==tuple:
@@ -248,7 +261,7 @@ class SpiderEnv(gym.Env):
         if self._episode_over:
             obs, info = self.reset()
             if self._actions_limit is not None and 0<self._actions_limit==self._actions_counter:
-                return obs, 0.0, False, True, info
+                return obs, 0.0, True, True, info
             else:
                 return obs, 0.0, True, False, info
         else:
@@ -289,12 +302,13 @@ class SpiderEnv(gym.Env):
                 print('reward',  reward)
                 
             if "reward limit" in self.rewards_policy and reward>self.rewards_policy["reward limit"]:
-                raise Exception(f"Too large reward detected: {reward}, diagnostic data: ", terminated, truncated,tableau_piles,
-                                      n_completed_seqs,
-                                      init_stock_cards,
-                                      init_facedown_cnts, facedown_counts,
-                                      init_depths,        seq_depths,
-                                      init_tableau_cards)
+                print(f"WARNING: Too large reward detected: {reward} for the following action: '{SpiderEnv.action_to_string(action)}'. \
+                      \ndiagnostic data: \n terminated={terminated}, truncated={truncated}, \ntableau_piles={tableau_piles},\
+                                      n_completed_seqs={n_completed_seqs},\
+                                       init_stock_cards={init_stock_cards},\
+                                      init_facedown_cnts={init_facedown_cnts}, facedown_counts={facedown_counts},\
+                                      init_depths={init_depths},        seq_depths={seq_depths},\
+                                      init_tableau_cards={init_tableau_cards} ")
             #if self._diagnostics_mode>=1 and action==__NOOP_ACTION:
                 
                 
@@ -304,9 +318,16 @@ class SpiderEnv(gym.Env):
             info = self.get_info()
     
             if self._render_state_timeout is not None and self._render_state_timeout>0 and self._actions_counter % self._render_state_timeout==0:
+                print("Actions taken:", self._actions_counter)
                 self.render(print_auxillary_info=self._diagnostics_mode>=1, show_agents_obs=self._diagnostics_mode>=2)
                 print(f"terminated: {terminated}, truncated: {truncated}")
                 #print(f"Vectorized state: {SpiderSpace._vectorize(self._internal_state)}")
+
+            ## this message is printed in self.get_action_mask:
+            # if self._diagnostics_mode>=0.5 and self.get_action_mask().sum()==1:
+            #     print("NOTE: Only one available action (NOOP) left!")
+            #     print("Actions taken:", self._actions_counter)
+            #     self.render(print_auxillary_info=self._diagnostics_mode>=1, show_agents_obs=self._diagnostics_mode>=2)
 
             self._episode_over = terminated or truncated
             return obs, reward, terminated, truncated, info
@@ -323,51 +344,57 @@ class SpiderEnv(gym.Env):
     # possible actions function 
     # each returns True if action is valie, else False
 
-    def get_action_mask(self,
-                        __RANKS_RANGE= SpiderSpace.HIGHEST_RANK - SpiderSpace.LOWEST_CARD+1,
-                        __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION
-                       ) -> npt.NDArray[np.bool]:
+    # def get_action_mask(self):
+    #     return self._action_mask
+    def action_masks(self) -> npt.NDArray[np.bool_]:
+        """Alias for `get_action_mask` method"""
+        return self.get_action_mask()
+    def get_action_mask(self, 
+                                    #_diagnostics_mode =0,
+                                    __RANKS_RANGE= SpiderSpace.HIGHEST_RANK - SpiderSpace.LOWEST_CARD+1,
+                                    __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION,
+                                    __DEPTHS_NP_ARANGE = np.arange(SpiderSpace.HIGHEST_RANK - SpiderSpace.LOWEST_CARD)
+                                    ) -> npt.NDArray[np.bool_]:
         actions_mask = np.zeros(self.action_space.n, dtype=bool)#.reshape((5,5)) #arr = np.zeros(shape=shape, dtype=bool)
         tableau_piles, stock_pile, counts, depths = self._unpack_state(self._internal_state)
         
         if len(self.action_space.shape)<=1:
-            ## STEP 0: calculate which cards can be moved from nonemtpy piles to nonempty piles
+            ## STEP 1: calculate which cards can be moved from nonemtpy piles to nonempty piles
 
             #if depths is None:
             #    depths = SpiderSpace._get_max_sequences_depths(piles)
-            #print(f"Calc depths: {depths}")
+            #if _diagnostics_mode: print(f"Calc depths: {depths}")
 
-            #top cards indices per eaxh pile [empty piles are omitted]
+            #top cards indices per each pile [empty piles are omitted]
             top_idc = SpiderSpace._get_top_cards_indices(tableau_piles)
-            #print(f"Top cards: {piles[top_idc]}")
+            #if _diagnostics_mode: print(f"Top cards: {tableau_piles[top_idc]}")
 
             ###if taking max depths:
-            cols= np.arange(tableau_piles.shape[0])
+            #cols= np.arange(tableau_piles.shape[0])
             ## masks which cards can be moved:
-            mask = (cols[depths!=0] - depths[depths!=0][:,None])<0
-            #print("mask: ",mask)
+            mask = (__DEPTHS_NP_ARANGE < depths[depths!=0][:,None])
+            #if _diagnostics_mode: print("mask: ",mask)
 
-            #print(f"{(depths[depths!=0][None,:]*mask)}")
             acc_depths = mask.cumsum(axis=1)#mask[:, ::-1].cumsum(axis=1)[:,::-1]
             max_depth = acc_depths.max()
             acc_depths = acc_depths[:,:max_depth]
             ## (N nonepty piles, max seq len)
-            #print(f"acc depths: {acc_depths}")
-            #print(f"piles as is: {tableau_piles}" )
+            #if _diagnostics_mode: print(f"acc depths: {acc_depths}")
+            #if _diagnostics_mode: print(f"piles as is: {tableau_piles}" )
 
             depth_piles = tableau_piles[top_idc[0]]* mask[None,:].T[:max_depth] # each pile per depth
             ## e.g. all the piles are present at the first coordinate
             ## thepiles with a top sequencs of depth>=2 are present at the second coordinate,
             ## etc
-            #print("depth piles",depth_piles)
-            #print("top idc", top_idc[1]) 
+            #if _diagnostics_mode: print("depth piles",depth_piles)
+            #if _diagnostics_mode: print("top idc", top_idc[1]) 
             idc_base_seq_cards = top_idc[1][:,None]-acc_depths+1
 
-            #print(idc_base_seq_cards)
+            #if _diagnostics_mode: print(idc_base_seq_cards)
 
             depth_ax, pile_ax = np.arange(max_depth)[None,:], np.arange(depth_piles.shape[1])[:,None]
             base_seq_cards = depth_piles[depth_ax, pile_ax, idc_base_seq_cards].T #- piles[top_idc]
-            #print(f"base seq cards:\n {base_seq_cards}")
+            #if _diagnostics_mode: print(f"base seq cards:\n {base_seq_cards}")
         
             ##src_trgt_diff= base_seq_cards[:,:,None] - base_seq_cards[:,None]
             #src_trgt_diff =tableau_piles[top_idc][:,None] - base_seq_cards[:,None]
@@ -378,9 +405,9 @@ class SpiderEnv(gym.Env):
             idepths, trgt, src = np.nonzero(SpiderSpace.is_sequential(moving_card     =base_seq_cards[:,None], 
                                                                            destination_card=tableau_piles[top_idc][:,None]))
             ## src -> trgt
-            #print("depths-1, targets, src piles: ", idepths, trgt, src)#top_idc[0][src], top_idc[0][trgt], idepth )
+            #if _diagnostics_mode: print("depths-1, targets, src piles: ", idepths, trgt, src)#top_idc[0][src], top_idc[0][trgt], idepth )
         
-            ## calcularing actions indices
+            ## calculating actions indices
             ## converting to original cooords:
 
             #check whether not same src and trgt &
@@ -395,12 +422,12 @@ class SpiderEnv(gym.Env):
             actions_mask[valid_moves_idc] = True
         
             
-            # STEP 2: True if possible to move cards from nonemtpy piles to empty piles:
+            # STEP 2: True if possible to move cards from non-emtpy piles to empty piles:
             if top_idc[0].shape[0]< tableau_piles.shape[0]:
                 empty_piles_mask = np.ones(tableau_piles.shape[0],  dtype=bool)
                 empty_piles_mask[top_idc[0]] = False
                 empty_piles_idc = np.nonzero(empty_piles_mask)[0]
-                ##print("empty piles idc", empty_piles_idc)
+                #if _diagnostics_mode: print("empty piles idc", empty_piles_idc)
                 ##src_trgt_diff0 = tableau_piles[empty_piles_idc][:, None] - base_seq_cards[:, None]
                 ##print("empty piles <- seqs diffs", src_trgt_diff0)
             
@@ -409,7 +436,7 @@ class SpiderEnv(gym.Env):
                 n_src0, n_trgt0 = src0.shape[0], empty_piles_idc.shape[0]
                 idepths0, orig_src0 = np.tile(idepths0, n_trgt0), np.tile(top_idc[0][src0], n_trgt0)
                 trgt0 = np.repeat(empty_piles_idc, n_src0)
-                #print(trgt0, idepths0, orig_src0)
+                #if _diagnostics_mode: print(trgt0, idepths0, orig_src0)
                 ##print(idepths0, empty_piles_idc[trgt0], top_idc[0][src0])
                 valid_moves0_idc = SpiderEnv._flatten_move_action(orig_src0,
                                                              trgt0,
@@ -417,15 +444,89 @@ class SpiderEnv(gym.Env):
         
                 actions_mask[valid_moves0_idc] = True
         
-            else:#STEP 3: calculate whether it is possible to deal cards [it's the last move] 
-                actions_mask[__DEAL_CARDS_ACTION] = counts[-1]>0 and np.all(top_idc[0]<tableau_piles.shape[1]-1)
+            else:# no empty piles
+                # STEP 3: calculate whether it is possible to deal cards [it's the last but one move idx] 
+                actions_mask[__DEAL_CARDS_ACTION] = counts[-1]>0 and np.all(top_idc[0]<tableau_piles.shape[1]-1) 
             #always available:
             actions_mask[__NOOP_ACTION] = True
             #print("idc of valid moves: ", np.nonzero(actions_mask))
                 
+            if actions_mask.sum()==1:
+                if self._diagnostics_mode>=0.5:
+                    print("NOTE: Only one available action (NOOP) left! Game over.")
+                    print("Actions taken during this game: ", self._actions_counter)
+                    self.render(print_auxillary_info=self._diagnostics_mode>=1, show_agents_obs=self._diagnostics_mode>=2)
+
+                self._episode_over = True
             return actions_mask
         else:
             raise NotImplementedError(f'Action space shape is multidimensional')
+        
+    @staticmethod
+    def _get_possible_targets(src_cards:int|npt.NDArray[np.integer], trgt_cards: npt.NDArray[np.integer]) -> npt.NDArray[np.integer]:
+        """Returns tuple: indices of piles where `src_card` can be moved (the second element) and indices of piles from which these `src_cards` come (the first element).
+        :params:
+            src_cards: int|npt.NDArray[np.integer] - card or array of cards to be moved
+            trgt_cards: npt.NDArray[np.integer] - array of target cards on top of tableau piles
+        """
+        trgt, src = np.nonzero(SpiderSpace.is_sequential(moving_card    =src_cards, 
+                                                         destination_card=trgt_cards[:, None]))
+        return src, trgt # reverted order to match src->trgt mapping semantics
+    
+    def _get_action_mask_nonvectorized(self,
+                                        __RANKS_RANGE= SpiderSpace.HIGHEST_RANK - SpiderSpace.LOWEST_CARD+1, __NONCARD_VALUE=NONCARD_VALUE,
+                                        __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION
+                                        ) -> npt.NDArray[np.bool]:
+        """Test function to check correctness of vectorized `get_action_mask` implementation. Extrymely slow."""
+        actions_mask = np.zeros(self.action_space.n, dtype=bool)#.reshape((5,5)) #arr = np.zeros(shape=shape, dtype=bool)
+
+        tableau_piles, stock_pile, counts, depths = self._unpack_state(self._internal_state)
+        #assert len(self.action_space.shape)<=1, "Action space shape is multidimensional"
+        
+        top_idc = SpiderSpace._get_top_cards_indices(tableau_piles) #2D array: first row - pile indices, second row - top card indices in these piles
+
+        # if tableau is not empty
+        if len(top_idc[0]):
+            # idc for empty piles
+            empty_trgt_idc = np.arange(tableau_piles.shape[0])
+            empty_trgt_idc[top_idc[0]] = -1
+            empty_trgt_idc = empty_trgt_idc[empty_trgt_idc>=0]
+
+            for i_pile_src in range(tableau_piles.shape[0]):
+                if depths[i_pile_src]>0:
+                    src_top_idx = top_idc[1][top_idc[0]==i_pile_src]
+                    for depth in range(1, depths[i_pile_src]+1):
+                        src_trgt_idc = SpiderEnv._get_possible_targets(src_cards=tableau_piles[i_pile_src, src_top_idx - depth +1],
+                                                                        trgt_cards=tableau_piles[top_idc])
+                        # step 1: nonemtpy target piles
+                        _trgt_idc = src_trgt_idc[1]
+                        trgt_idc = top_idc[0][_trgt_idc] # nonemtpy target piles indices
+                        trgt_idc = trgt_idc[(top_idc[1][_trgt_idc] + depth <tableau_piles.shape[1]) ] # filter out piles which would exceed max height
+                        assert i_pile_src not in trgt_idc, "Source and target piles must be different"
+                        action_idc = SpiderEnv._flatten_move_action(i_pile_src, trgt_idc, depth)
+                        actions_mask[action_idc] = True
+
+                        # moving_card = tableau_piles[i_pile_src, src_top_idx - depth +1]
+                        # for i_pile_trgt in range(tableau_piles.shape[0]):
+                        #     if i_pile_trgt != i_pile_src:
+                        #         trgt_top_idx = SpiderSpace._get_top_card_index(tableau_piles[i_pile_trgt])
+                        #         #check whether move is valid:
+                        #         if trgt_top_idx<tableau_piles.shape[1]-1 and SpiderSpace.is_sequential(moving_card, tableau_piles[i_pile_trgt, trgt_top_idx]):
+                        #             action_idc = SpiderEnv._flatten_move_action(i_pile_src, i_pile_trgt, depth)
+                        #             actions_mask[action_idc] = True
+
+                        # step 2: empty target piles
+                        action_idc2 = SpiderEnv._flatten_move_action(i_pile_src, empty_trgt_idc, depth)
+                        actions_mask[action_idc2] = True
+
+            # STEP 3: check whether it is possible to deal cards [it's the last but one move idx]
+            actions_mask[__DEAL_CARDS_ACTION] = counts[-1]>0 and np.all(top_idc[0]<tableau_piles.shape[1]-1) and len(top_idc[0])==tableau_piles.shape[0]
+
+        # always available:
+        actions_mask[__NOOP_ACTION] = True
+
+        return actions_mask
+
             
     def sample_valid_action(self):
         """Samples a valid random action. An alternative to `env.action_space.sample()` which may return invalid actions."""
@@ -443,6 +544,19 @@ class SpiderEnv(gym.Env):
             return self._deal_cards()
         else:#__NOOP_ACTION
             return False
+    @staticmethod
+    def action_to_string(action:int, 
+                          __MOVE_ACTIONS_RANGE=MOVE_ACTIONS_RANGE, __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION) -> str:
+        """Converts action number into human-readable string"""
+        if 0<=action<__MOVE_ACTIONS_RANGE:
+            source, target, depth = SpiderEnv._unflatten_move_action(action)
+            return f"Move top {depth} cards from pile {source} to pile {target}"
+        elif action==__DEAL_CARDS_ACTION:
+            return "Deal cards from stock pile"
+        elif action==__NOOP_ACTION:
+            return "NOOP (no available actions)"
+        else:
+            return "Invalid action"
         
     @staticmethod
     @njit(inline='always')
@@ -461,7 +575,6 @@ class SpiderEnv(gym.Env):
         """returns `source*N_PILES*(HIGHEST_RANK-1) + target*(HIGHEST_RANK-1) + depth-1` value when moving cards. 
             The result of this function is inverse of `_unflatten_move_action`"""
         return source*__N_PILES * __MAX_SEQ_LEN + target * __MAX_SEQ_LEN + depth-1
-   
 
     @staticmethod 
     #@njit(inline='always', nopython=False) # cannot determine SpiderSpace name
@@ -530,7 +643,32 @@ class SpiderEnv(gym.Env):
             SpiderEnv._update_depths(tableau_piles, seq_depths, target, trgt_height, source, depth)
 
         return res
-        
+    
+    # implementing updating action mask instead of computing it every time [when `step` method is called] would require to perform almost all the calculations from `get_action_mask` method, hence no sense in implementing it for now.
+    # def _update_action_mask(self, src_pile:int, trgt_pile:int,
+    #                         __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION):
+    #     """This method is to be used to update `_action_mask` attribute each time a card or a sequence of cards is moved.
+    #     """
+    #     tableau_piles, stock_pile, counts, seq_depths = self._unpack_state(self._internal_state)
+    #     # step 0: transfer possible moves from other piles to old `src_pile` to positions with `trgt_pile` as destination
+    #     self._action_mask
+    #     src, trgt, depth = SpiderEnv._unflatten_move_action(np.nonzero(self._action_mask))
+    #     old_mask = trgt== src_pile
+    #     old_acton_mask =   SpiderEnv._flatten_move_action(src[old_mask], src_pile, depth[old_mask])
+    #     new_action_mask = SpiderEnv._flatten_move_action(src[old_mask], src_pile, depth[old_mask])
+    #     self._action_mask[old_acton_mask] = False
+    #     self._action_mask[new_action_mask] = True
+
+    #     # step 1: calculate possible moves from `src_pile` and `trgt_pile` to other piles
+    #     if seq_depths[src_pile]==0: ## calc possible moves from other piles to `src_pile` if it has become empty
+    #         ...
+    #         # step 2: dealing cards is not possible
+    #         self._action_mask[__DEAL_CARDS_ACTION] = False
+    #     else:                       ## calc possible moves from other piles to `src_pile` if it is nonempty
+    #         ...
+    #     # step 3: NOOP action is always possible
+    #     self._action_mask[__NOOP_ACTION] = True
+
     def _move_cards_sequence(self, source: int, target: int, depth: int,
                            __N_PILES=N_PILES) -> bool:
         """Does not check the validity of a sequence to move (this should be ensured by calling `max_sequences_depths()`).
@@ -541,7 +679,7 @@ class SpiderEnv(gym.Env):
                 - target: idx of a pile - destination for a sequence of cards to move\n
                 - depth: number of cards to move\n
             :returns:
-                True if the move was successful. _In this case, _facedown_tableu_cards is updated if needed (decreased by 1 if a new card is revealed in `source` pile).
+                True if the move was successful. _In this case, _facedown_tableau_cards is updated if needed (decreased by 1 if a new card is revealed in `source` pile).
                 If `target==source` returns False
                 """
         assert 0<=target <__N_PILES and 0<=source <__N_PILES
@@ -564,7 +702,7 @@ class SpiderEnv(gym.Env):
                 #raise Exception(f"Trying to move a sequence with facedown cards from pile {source}")
                 
             elif target not in idx_top_cards[0]: #if target is a free pile
-                self._facedown_tableu_cards -= SpiderEnv._swap_cards(tableau_piles, source, target, depth, src_height, 0, 
+                self._facedown_tableau_cards -= SpiderEnv._swap_cards(tableau_piles, source, target, depth, src_height, 0, 
                                                                     facedown_counts=counts,  seq_depths=seq_depths)
                 return True
                      
@@ -572,7 +710,7 @@ class SpiderEnv(gym.Env):
                 trgt_height = idx_top_cards[1][idx_top_cards[0]==target][0]+1 #+1 so that an empty space above is chosen
             
                 if (trgt_height + depth< self.observation_space.pile_size   and 1 < SpiderSpace.get_rank(tableau_piles[target, trgt_height-1])==SpiderSpace.get_rank(tableau_piles[source, src_height-depth+1]) +1 ):
-                    self._facedown_tableu_cards -= SpiderEnv._swap_cards(tableau_piles, source, target, depth, src_height, trgt_height, 
+                    self._facedown_tableau_cards -= SpiderEnv._swap_cards(tableau_piles, source, target, depth, src_height, trgt_height, 
                                                                         facedown_counts=counts, seq_depths=seq_depths)
                     # print(self._internal_state)
                     return True
@@ -593,7 +731,7 @@ class SpiderEnv(gym.Env):
             Once cards are dealt, updates sequences depths."""
         tableau_piles, stock_pile, counts, seq_depths = self._unpack_state(self._internal_state)
 
-        #check whhether there are cards in stock pile and each tableu pile is not empty (depth>=1)
+        #check whhether there are cards in stock pile and each tableau pile is not empty (depth>=1)
         if (n_cards_stock:=counts[-1]) and np.all(seq_depths>0):
             # new cards positions = count cards +1 -1 (because of indexing)
             # ALTERNATIVELY, `SpiderSpace._get_top_cards_indices(tableau_piles)` can be used here
@@ -624,7 +762,7 @@ class SpiderEnv(gym.Env):
             else:
                 raise Exception(f"Cards are found on places where zeros expected: {tableau_piles}")
         else:
-            False # it was not possible to deal another set of cards bc one of piles (stock or tableu) is empty
+            False # it was not possible to deal another set of cards bc one of piles (stock or tableau) is empty
 
 
     def _discard_complete_sequences(self,
@@ -734,12 +872,13 @@ class SpiderEnv(gym.Env):
         piles,stock,counts,depths = SpiderEnv._unpack_state(self._internal_state)
         print(f"Number of complete sequences: {self._complete_sequences}\nStock cards: {counts[-1]}")
         i_nzpiles, idx_nz = np.nonzero(piles)# * (piles>0))
-        n_render_rows_limit = max(idx_nz)+1#self.observation_space.shape[1]
-
-        f_card2str = SpiderSpace._card_to_fancy_str if fancy_mode else SpiderSpace._card_to_str
-        print('\n'.join(" ".join(f_card2str(piles[i_pile, i_cards_row]) for i_pile in range(len(piles)))  
+        if len(i_nzpiles):
+            n_render_rows_limit = max(idx_nz)+1#self.observation_space.shape[1]
+            f_card2str = SpiderSpace._card_to_fancy_str if fancy_mode else SpiderSpace._card_to_str
+            print('\n'.join(" ".join(f_card2str(piles[i_pile, i_cards_row]) for i_pile in range(len(piles)))  
                             for i_cards_row in range(n_render_rows_limit)))
-
+        else:
+            print("<empty tableau>")
         if print_auxillary_info:
             print(f"Face-down cards counts: {counts}")
             print(f"Depths of top sequences: {depths}")
