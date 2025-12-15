@@ -1,3 +1,4 @@
+# this script runs thi]
 import os
 
 import json
@@ -14,6 +15,7 @@ from SpiderSolitaire.env.spider_env import SpiderEnv
 
 
 LOG_DIR = "./SpiderSolitaire/logs/training/"
+SAVE_MODELS_DIR = "./SpiderSolitaire/models/"
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 CPU_CORES_DEFAULT_LIMIT = ncores if os.cpu_count() is not None and (ncores:=int(0.9*os.cpu_count())) else 1
@@ -34,16 +36,16 @@ class SpiderParallelCallback(BaseCallback):
         try:
             infos = self.model.env.env_method("get_info") if hasattr(self.model.env, 'env_method') else []
             seqs = [info.get("n_complete_sequences", -1) for info in infos]
-            facedown_cards = [info.get("n_facedown_tableu_cards", -1) for info in infos]
+            facedown_cards = [info.get("n_facedown_tableau_cards", -1) for info in infos]
 
             if self.verbose > 0:
                 for i, (s, f) in enumerate(zip(seqs, facedown_cards)):
                     print(f"Env {i}: completed sequences: {s}, facedown cards: {f}")
 
             self.logger.record("spider/mean_complete_sequences", np.mean(seqs))
-            self.logger.record("spider/mean_facedown_tableu_cards", np.mean(facedown_cards))
+            self.logger.record("spider/mean_facedown_tableau_cards", np.mean(facedown_cards))
             self.logger.record("spider/std_complete_sequences", np.std(seqs))
-            self.logger.record("spider/std_facedown_tableu_cards", np.std(facedown_cards))
+            self.logger.record("spider/std_facedown_tableau_cards", np.std(facedown_cards))
         except Exception as e:
             if self.verbose > 0:
                 print(f"SpiderParallelCallback: Could not record metrics: {e}")
@@ -61,13 +63,14 @@ from sb3_contrib.common.wrappers import ActionMasker
 
 
 def train_maskable_ppo_parallel(n_envs: int=CPU_CORES_DEFAULT_LIMIT,
-                                n_suits: int =1, log_dir: str = None,
+                                n_suits: int =1, log_dir: str = None, save_dir: str=None,
+
                                 actions_limit: int =1000, n_steps: int =1*1000, batch_size: int =1000, total_timesteps: int =1000_000,
                                 verbose: int =1,
                                 lr: float =3e-4, gamma: float =0.995,
                                 rewards_policy:dict[str, float]={"discover_card": 4,
-                                                                    "free pile": 16,
-                                                                    "extend sequence": 1,
+                                                                    "free pile": 6,
+                                                                    'extend sequence': 0.75,
                                                                     "deal cards": -0.5},
                                     _render_state_timeout=1_0000,  _diagnostics_mode=0, 
                                     tb_log_name: str =None
@@ -89,6 +92,12 @@ def train_maskable_ppo_parallel(n_envs: int=CPU_CORES_DEFAULT_LIMIT,
     
     if log_dir is None:
         log_dir = LOG_DIR+f'MaskablePPO_{n_suits}suit/'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    if save_dir is None:
+        save_dir = SAVE_MODELS_DIR+f'MaskablePPO_{n_suits}suit/'
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     n_max_envs =  ncores if (ncores:=os.cpu_count()) is not None else 1
 
@@ -104,22 +113,12 @@ def train_maskable_ppo_parallel(n_envs: int=CPU_CORES_DEFAULT_LIMIT,
     envp = SubprocVecEnv(envs)
     envp = VecMonitor(envp,filename=log_dir+"vecmonitor.csv")
 
-    model = MaskablePPO(
-        "MlpPolicy",
-        envp,
-        verbose=verbose,
-        n_steps   =n_steps,#1000
-        batch_size=batch_size,#the whole game is used to update the policy, updates can be more stable than when games are splitted into smaller chunks
-        learning_rate=lr,
-        gamma=gamma,
-        device="auto",
-        tensorboard_log=log_dir
-    )
-
+    rew_code = ''.join('_'+k[0]+(k[k.rfind(' ')+1] if k.rfind(' ') else '')+str(round(v,1))  for k, v in rewards_policy.items() )
+    model_alias = f"MaskablePPO_{n_suits}suits_{n_envs}_parenvs_{actions_limit}_{n_steps}_{batch_size}_{rew_code}"
     l = model.learn(total_timesteps=total_timesteps,callback=SpiderParallelCallback(), 
-                    tb_log_name=f"MaskablePPO_{n_suits}suits_{n_envs}_parenvs_{actions_limit}_{n_steps}_{batch_size}" if tb_log_name is None else tb_log_name)
+                    tb_log_name=model_alias if tb_log_name is None else tb_log_name)
+    model.save(save_dir+model_alias)
     return model
-
 
 if __name__ == "__main__": 
     import argparse
@@ -127,9 +126,11 @@ if __name__ == "__main__":
     parser.add_argument('--n_envs', type=int, default=CPU_CORES_DEFAULT_LIMIT)
     parser.add_argument('--n_suits', type=int, default=1)
     parser.add_argument('--log_dir', type=str, default=None)
+    parser.add_argument('--save_dir', type=str, default=None)
     parser.add_argument('--actions_limit', type=int, default=1000)
     parser.add_argument('--n_steps', type=int, default=4*1000//round(np.power(CPU_CORES_DEFAULT_LIMIT, 1/3))-1)      
-    parser.add_argument('--batch_size', type=int, default=1000)
+    # rollout_size = n_steps * n_envs
+    parser.add_argument('--batch_size', type=int, default=1000) # must divide rollout_size
     parser.add_argument('--total_timesteps', type=int, default=1_000_000//round(np.power(CPU_CORES_DEFAULT_LIMIT, 1/3)))
 
     parser.add_argument('--verbose', type=int, default=1)   
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--gamma', type=float, default=0.995)
 
-    parser.add_argument('--rewards_policy', type=str, default="{'discover_card': 4,  'free pile': 16, 'extend sequece': 1, 'deal cards': -0.5}")
+    parser.add_argument('--rewards_policy', type=str, default="{'discover_card': 4,  'free pile': 8, 'extend sequece': 0.7, 'deal cards': -0.5}")
 
     parser.add_argument('--_render_state_timeout', type=int, default=1_0000)
     parser.add_argument('--_diagnostics_mode', type=int, default=0)
@@ -158,5 +159,4 @@ if __name__ == "__main__":
                                         
                                         _render_state_timeout=args._render_state_timeout,  _diagnostics_mode=args._diagnostics_mode,
                                         tb_log_name=args.tb_log_name)
-
         
