@@ -1,0 +1,58 @@
+         101408753 function calls (96552758 primitive calls) in 131.181 seconds
+
+   Ordered by: cumulative time
+   List reduced from 3656 to 50 due to restriction <50>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000  131.501  131.501 profile_test_env.py:15(run_workload)
+        1    0.148    0.148  131.491  131.491 test_env.py:16(evaluate_random_agent)
+   315149    4.818    0.000   99.422    0.000 dispatcher.py:344(_compile_for_args)
+    20000    1.023    0.000   98.788    0.005 spider_env.py:246(step)
+    40200    6.425    0.000   57.002    0.001 spider_env.py:339(get_action_mask)
+315153/315149    4.125    0.000   56.224    0.000 dispatcher.py:862(compile)
+    20000    0.250    0.000   52.284    0.003 spider_env.py:516(_num2act)
+    16592    1.280    0.000   46.600    0.003 spider_env.py:640(_move_cards_sequence)
+    20200    0.137    0.000   31.377    0.002 spider_env.py:162(get_info)
+    20000    0.826    0.000   27.253    0.001 spider_env.py:511(sample_valid_action)
+1508581/1508513    3.964    0.000   26.059    0.000 abstract.py:61(__call__)
+   485989    0.897    0.000   23.682    0.000 dispatcher.py:680(typeof_pyval)
+    16592    0.354    0.000   22.988    0.001 spider_env.py:576(_swap_cards)
+   486519    1.014    0.000   21.145    0.000 typeof.py:27(typeof)
+   486519    0.980    0.000   19.143    0.000 functools.py:930(wrapper)
+    33245    3.491    0.000   17.517    0.001 spider_space.py:231(_get_max_sequences_depths)
+   945478    1.494    0.000   17.045    0.000 contextlib.py:515(enter_context)
+    16592    0.397    0.000   16.437    0.001 spider_env.py:547(_update_depths)
+   369911    1.916    0.000   16.201    0.000 typeof.py:258(_typeof_ndarray)
+2557105/1295306    2.252    0.000   16.072    0.000 {built-in method builtins.next}
+   315697    2.287    0.000   15.300    0.000 contextlib.py:571(__exit__)
+  1260612    3.069    0.000   14.768    0.000 event.py:337(install_timer)
+  1869034    3.471    0.000   12.801    0.000 {method 'get' of 'dict' objects}
+  1508581    2.013    0.000   10.626    0.000 abstract.py:49(_intern)
+1265955/635056    1.044    0.000    8.855    0.000 contextlib.py:136(__enter__)
+    12/11    0.000    0.000    8.305    0.755 dispatcher.py:79(compile)
+    12/11    0.000    0.000    8.305    0.755 dispatcher.py:86(_compile_cached)
+    12/11    0.001    0.000    8.305    0.755 dispatcher.py:101(_compile_core)
+    12/11    0.000    0.000    8.302    0.755 compiler.py:713(compile_extra)
+1265955/635065    1.238    0.000    8.288    0.000 contextlib.py:145(__exit__)
+4739247/3626524    4.147    0.000    7.938    0.000 abstract.py:121(__hash__)
+   369980    1.848    0.000    7.870    0.000 npytypes.py:444(__init__)
+  7256809    4.113    0.000    7.822    0.000 {built-in method builtins.isinstance}
+    20000    0.534    0.000    7.325    0.000 spider_env.py:736(_discard_complete_sequences)
+  1260612    0.922    0.000    7.153    0.000 event.py:312(install_listener)
+  840/554    0.005    0.000    7.016    0.013 compiler_lock.py:32(_acquire_compile_lock)
+    19/11    0.000    0.000    6.787    0.617 compiler.py:433(compile_extra)
+    19/11    0.000    0.000    6.780    0.616 compiler.py:500(_compile_bytecode)
+    19/11    0.000    0.000    6.779    0.616 compiler.py:456(_compile_core)
+    19/11    0.003    0.000    6.771    0.616 compiler_machinery.py:342(run)
+  513/297    0.028    0.000    6.756    0.023 compiler_machinery.py:267(_runPass)
+ 1539/891    0.003    0.000    6.692    0.008 compiler_machinery.py:271(check)
+    19/11    0.002    0.000    6.060    0.551 typed_passes.py:439(run_pass)
+      200    0.008    0.000    5.294    0.026 spider_env.py:112(reset)
+   315156    1.338    0.000    4.740    0.000 sigutils.py:22(normalize_signature)
+    56792    0.937    0.000    4.665    0.000 spider_space.py:191(_get_top_cards_indices)
+   369981    2.345    0.000    4.559    0.000 common.py:49(__init__)
+     7857    4.179    0.001    4.348    0.001 ffi.py:210(__call__)
+   316000    0.240    0.000    4.322    0.000 compiler_lock.py:22(__exit__)
+   316000    0.232    0.000    4.157    0.000 compiler_lock.py:19(__enter__)
+
+
