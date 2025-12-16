@@ -133,7 +133,8 @@ def train_maskable_ppo_parallel(agent_configs: dict[str, int], env_configs: dict
         process_agent_configs = [cfg for i, cfg in enumerate(agent_configs) if i % n_processes == i_process]
         process_env_configs   = [cfg for i, cfg in enumerate(env_configs)   if i % n_processes == i_process]
 
-        rew_codes = [''.join('_'+k[0]+(k[k.rfind(' ')+1] if k.rfind(' ') else '')+str(round(v,1))  for k, v in config['rewards_policy'].items() ) 
+        special_codes = {'discover card': 'dd'}
+        rew_codes = [''.join('_'+ (k[0]+(k[k.rfind(' ')+1] if k.rfind(' ') else '')) if k not in special_codes else special_codes[k] + str(round(v,1))  for k, v in config['rewards_policy'].items() ) 
                         for config in process_env_configs]
         agent_cfg_codes = [f"{config['n_steps']}_{config['batch_size']}_{config.get('gamma', default_gamma)}" for config in process_agent_configs]   
 

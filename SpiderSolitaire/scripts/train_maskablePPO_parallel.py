@@ -68,9 +68,9 @@ def train_maskable_ppo_parallel(n_envs: int=CPU_CORES_DEFAULT_LIMIT,
                                 actions_limit: int =1000, n_steps: int =1*1000, batch_size: int =1000, total_timesteps: int =1000_000,
                                 verbose: int =1,
                                 lr: float =3e-4, gamma: float =0.995,
-                                rewards_policy:dict[str, float]={"discover_card": 4,
+                                rewards_policy:dict[str, float]={"discover card": 8,
                                                                     "free pile": 6,
-                                                                    'extend sequence': 0.75,
+                                                                    "extend sequence": 0.75,
                                                                     "deal cards": -0.5},
                                     _render_state_timeout=1_0000,  _diagnostics_mode=0, 
                                     tb_log_name: str =None
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--gamma', type=float, default=0.995)
 
-    parser.add_argument('--rewards_policy', type=str, default="{'discover_card': 4,  'free pile': 8, 'extend sequece': 0.7, 'deal cards': -0.5}")
+    parser.add_argument('--rewards_policy', type=str, default="{'discover card': 8,  'free pile': 8, 'extend sequence': 0.7, 'deal cards': -0.5}")
 
     parser.add_argument('--_render_state_timeout', type=int, default=1_0000)
     parser.add_argument('--_diagnostics_mode', type=int, default=0)

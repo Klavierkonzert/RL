@@ -269,7 +269,7 @@
 	"env_configs": [
          {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.4, 
@@ -278,7 +278,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.2,
 				"deal cards": -0.2, 
@@ -287,7 +287,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.2, 
@@ -296,7 +296,7 @@
         },
          {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.4, 
@@ -305,7 +305,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 2,
 				"free pile": 1,
 				"extend sequence": 0.2,
 				"deal cards": -0.2, 
@@ -314,7 +314,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 4,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.2, 
@@ -325,7 +325,7 @@
 
                 {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.4, 
@@ -334,7 +334,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.1,
 				"deal cards": -0.2, 
@@ -343,7 +343,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.2, 
@@ -352,7 +352,7 @@
         },
          {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.4, 
@@ -361,7 +361,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.1,
 				"deal cards": -0.2, 
@@ -370,7 +370,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.2, 
@@ -379,7 +379,7 @@
         },
                 {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.4, 
@@ -388,7 +388,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.2,
 				"deal cards": -0.2, 
@@ -397,7 +397,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.2, 
@@ -406,7 +406,7 @@
         },
          {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.4, 
@@ -415,7 +415,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.2,
 				"deal cards": -0.2, 
@@ -424,7 +424,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.2,
                 "deal cards": -0.2, 
@@ -435,7 +435,7 @@
 
                 {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.4, 
@@ -444,7 +444,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.1,
 				"deal cards": -0.2, 
@@ -453,7 +453,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.2, 
@@ -462,7 +462,7 @@
         },
          {
             "rewards_policy": {
-                "discover_card": 5,
+                "discover card": 6,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.4, 
@@ -471,7 +471,7 @@
         },
 		{
 			"rewards_policy": {
-				"discover_card": 2,
+				"discover card": 4,
 				"free pile": 1,
 				"extend sequence": 0.1,
 				"deal cards": -0.2, 
@@ -480,7 +480,7 @@
 		},
         {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover card": 2,
                 "free pile": 1,
                 "extend sequence": 0.1,
                 "deal cards": -0.2, 
