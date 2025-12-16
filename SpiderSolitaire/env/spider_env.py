@@ -99,9 +99,9 @@ class SpiderEnv(gym.Env):
 
         ################ rewards ##################################
         if rewards_policy is not None:
-            self.rewards_policy = {**SpiderEnv.DEFAULT_REWARDS ,**rewards_policy}
+            self._rewards_policy = {**SpiderEnv.DEFAULT_REWARDS ,**rewards_policy}
         else:
-            self.rewards_policy = SpiderEnv.DEFAULT_REWARDS 
+            self._rewards_policy = SpiderEnv.DEFAULT_REWARDS 
 
         if rewards_limits is not None:
             # if set, rewards are extracted every time from these limits
@@ -173,7 +173,9 @@ class SpiderEnv(gym.Env):
              d['action_mask'] = self.get_action_mask()
         return d
 
-
+    def get_rewards_policy(self):
+        """Getter for `rewards_policy` attribute"""
+        return self._rewards_policy.copy()
     def _get_reward(self, action:int, 
                     terminated, truncated,
                     tableau_piles,
@@ -194,25 +196,25 @@ class SpiderEnv(gym.Env):
         reward= 0
         if action is not None:
             if n_completed_seqs:
-                reward += self.rewards_policy['complete sequence']*(n_completed_seqs)
+                reward += self._rewards_policy['complete sequence']*(n_completed_seqs)
                     
-            reward += self.rewards_policy['discover card']*(init_facedown_cnts - facedown_counts[:__N_TARGETS]).sum()
+            reward += self._rewards_policy['discover card']*(init_facedown_cnts - facedown_counts[:__N_TARGETS]).sum()
             #if action<=__MOVE_ACTIONS_RANGE: #if not deal cards action
             # IF seq depth is increased
             diff_depths = init_depths - seq_depths
-            reward += self.rewards_policy['extend sequence'] * diff_depths.sum() if np.all(diff_depths>0) else 0
+            reward += self._rewards_policy['extend sequence'] * diff_depths.sum() if np.all(diff_depths>0) else 0
                 
             # reward for freeing a pile
             tab_cards = np.count_nonzero(tableau_piles-__NONCARD_VALUE, axis=1)
             n_freed_piles = ((tab_cards==0) & (tab_cards-init_tableau_cards<1)).sum()
                 
             ##_extend_sequence_reward coulbe used here
-            #reward+= self.rewards_policy["free pile"]*n_freed_piles
+            #reward+= self._rewards_policy["free pile"]*n_freed_piles
             ##to inttroduce this reward, prevent an agent from moving sequences back and forth
 
-            if action==__DEAL_CARDS_ACTION and "deal cards" in self.rewards_policy and self.rewards_policy["deal cards"]!=0:
+            if action==__DEAL_CARDS_ACTION and "deal cards" in self._rewards_policy and self._rewards_policy["deal cards"]!=0:
                 # punish for dealing cards:
-                coefff =  self.rewards_policy["deal cards"]
+                coefff =  self._rewards_policy["deal cards"]
                 if type(coefff)==tuple:
                     deal_cards_reward = SpiderEnv._deal_cards_reward(init_stock_cards, init_facedown_cnts, init_depths,
                                                                        *coefff )
@@ -226,13 +228,13 @@ class SpiderEnv(gym.Env):
                     self.render(print_auxillary_info=True)
                     
             ##punishment if no available actions left
-            #elif  action==__NOOP_ACTION and not terminated and "no available actions" in self.rewards_policy : 
-            #    reward += self.rewards_policy['no available actions'] *(__N_TARGETS-self._complete_sequences )* ((self._actions_limit-self._actions_counter)/self._actions_limit if self._actions_limit is not None else 1)
-            elif  action==__NOOP_ACTION and not terminated and "no available actions" in self.rewards_policy:
-                reward +=self.rewards_policy['NOOP']
+            #elif  action==__NOOP_ACTION and not terminated and "no available actions" in self._rewards_policy : 
+            #    reward += self._rewards_policy['no available actions'] *(__N_TARGETS-self._complete_sequences )* ((self._actions_limit-self._actions_counter)/self._actions_limit if self._actions_limit is not None else 1)
+            elif  action==__NOOP_ACTION and not terminated and "no available actions" in self._rewards_policy:
+                reward +=self._rewards_policy['NOOP']
             
-            if 'step' in self.rewards_policy:
-                reward += self.rewards_policy['step'] # punisment for a step
+            if 'step' in self._rewards_policy:
+                reward += self._rewards_policy['step'] # punisment for a step
                 
         # else:
         #     reward -= 010 #punishment for invalid action
@@ -243,8 +245,8 @@ class SpiderEnv(gym.Env):
             # if truncated:
             #     reward -= (__N_TARGETS-self._complete_sequences)**2 
         # reward for victory:
-        if self._complete_sequences == __N_TARGETS and 'victory' in self.rewards_policy:
-            reward += self.rewards_policy['victory']
+        if self._complete_sequences == __N_TARGETS and 'victory' in self._rewards_policy:
+            reward += self._rewards_policy['victory']
 
         return reward
 
@@ -297,11 +299,11 @@ class SpiderEnv(gym.Env):
                                       init_facedown_cnts, facedown_counts,
                                       init_depths,        seq_depths,
                                       init_tableau_cards)
-            if reward>(self.rewards_policy["complete sequence"]//4) and self._diagnostics_mode>0.75 or reward>self.rewards_policy["complete sequence"]//2 and self._diagnostics_mode>2:
+            if reward>(self._rewards_policy["complete sequence"]//4) and self._diagnostics_mode>0.75 or reward>self._rewards_policy["complete sequence"]//2 and self._diagnostics_mode>2:
                 print('action ', self._unflatten_move_action(action)if  0<=action<self.action_space.n else action)
                 print('reward',  reward)
                 
-            if "reward limit" in self.rewards_policy and reward>self.rewards_policy["reward limit"]:
+            if "reward limit" in self._rewards_policy and reward>self._rewards_policy["reward limit"]:
                 print(f"WARNING: Too large reward detected: {reward} for the following action: '{SpiderEnv.action_to_string(action)}'. \
                       \ndiagnostic data: \n terminated={terminated}, truncated={truncated}, \ntableau_piles={tableau_piles},\
                                       n_completed_seqs={n_completed_seqs},\
