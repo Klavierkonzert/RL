@@ -1,8 +1,8 @@
 {
-	"agent_configs": [
+	 "agent_configs": [
 		{
 			"n_steps": 4096,
-			"batch_size": 256,
+			"batch_size": 1024,
 			"learning_rate": 0.0003,
 			"gamma": 0.995,
 			"gae_lambda": 0.95,
@@ -13,16 +13,16 @@
 		},
 		{
 			"n_steps": 4096,
-			"batch_size": 512,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
+			"batch_size": 1024,
+			"learning_rate": 0.0003,
+			"gamma": 0.995,
+			"gae_lambda": 0.95,
 			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		},
-        {
+        	{
 			"n_steps": 4096,
 			"batch_size": 1024,
 			"learning_rate": 0.0003,
@@ -36,39 +36,38 @@
 		{
 			"n_steps": 4096,
 			"batch_size": 2048,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
-			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
-			"max_grad_norm": 0.5
-		},
-
-        {
-			"n_steps": 8192,
-			"batch_size": 256,
 			"learning_rate": 0.0003,
 			"gamma": 0.995,
 			"gae_lambda": 0.95,
-			"clip_range": 0.2,
+			"clip_range": 0.15,
 			"vf_coef": 0.5,
 			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		},
-		{
-			"n_steps": 8192,
-			"batch_size": 512,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
+        		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.995,
+			"gae_lambda": 0.95,
 			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		},
-        {
-			"n_steps": 8192,
+        		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.995,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        		{
+			"n_steps": 4096,
 			"batch_size": 1024,
 			"learning_rate": 0.0003,
 			"gamma": 0.995,
@@ -79,40 +78,17 @@
 			"max_grad_norm": 0.5
 		},
 		{
-			"n_steps": 8192,
-			"batch_size": 2048,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
-			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
-			"max_grad_norm": 0.5
-		},
-
-        {
 			"n_steps": 4096,
-			"batch_size": 256,
+			"batch_size": 1024,
 			"learning_rate": 0.0003,
 			"gamma": 0.995,
 			"gae_lambda": 0.95,
-			"clip_range": 0.2,
+			"clip_range": 0.15,
 			"vf_coef": 0.5,
 			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		},
-		{
-			"n_steps": 4096,
-			"batch_size": 512,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
-			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
-			"max_grad_norm": 0.5
-		},
-        {
+        	{
 			"n_steps": 4096,
 			"batch_size": 1024,
 			"learning_rate": 0.0003,
@@ -126,42 +102,41 @@
 		{
 			"n_steps": 4096,
 			"batch_size": 2048,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
-			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
-			"max_grad_norm": 0.5
-		},
-
-        {
-			"n_steps": 8192,
-			"batch_size": 256,
 			"learning_rate": 0.0003,
 			"gamma": 0.995,
 			"gae_lambda": 0.95,
-			"clip_range": 0.2,
+			"clip_range": 0.15,
 			"vf_coef": 0.5,
 			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		},
-		{
-			"n_steps": 8192,
-			"batch_size": 512,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
+        {
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.995,
+			"gae_lambda": 0.95,
 			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		},
-        {
-			"n_steps": 8192,
+        		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.995,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        		{
+			"n_steps": 4096,
 			"batch_size": 1024,
 			"learning_rate": 0.0003,
-			"gamma": 0.995,
+			"gamma": 0.999,
 			"gae_lambda": 0.95,
 			"clip_range": 0.2,
 			"vf_coef": 0.5,
@@ -169,150 +144,348 @@
 			"max_grad_norm": 0.5
 		},
 		{
-			"n_steps": 8192,
-			"batch_size": 2048,
-			"learning_rate": 0.0002,
-			"gamma": 0.997,
-			"gae_lambda": 0.92,
+			"n_steps": 4096,
+			"batch_size": 1024,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
 			"clip_range": 0.15,
-			"vf_coef": 0.4,
-			"ent_coef": 0.02,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        	{
+			"n_steps": 4096,
+			"batch_size": 1024,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.2,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        		{
+			"n_steps": 4096,
+			"batch_size": 1024,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.2,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+		{
+			"n_steps": 4096,
+			"batch_size": 1024,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        	{
+			"n_steps": 4096,
+			"batch_size": 1024,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.2,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+		{
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        {
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
+			"max_grad_norm": 0.5
+		},
+        {
+			"n_steps": 4096,
+			"batch_size": 2048,
+			"learning_rate": 0.0003,
+			"gamma": 0.999,
+			"gae_lambda": 0.95,
+			"clip_range": 0.15,
+			"vf_coef": 0.5,
+			"ent_coef": 0.01,
 			"max_grad_norm": 0.5
 		}
 	],
+
 	"env_configs": [
-        {
+         {
             "rewards_policy": {
                 "discover_card": 5,
                 "free pile": 1,
                 "extend sequence": 0.2,
-                "deal cards": -0.2
+                "deal cards": -0.4, 
+                "step":-0.2
             }
         },
+		{
+			"rewards_policy": {
+				"discover_card": 2,
+				"free pile": 1,
+				"extend sequence": 0.2,
+				"deal cards": -0.2, 
+                "step":-0.2
+			}
+		},
         {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.2,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
+         {
             "rewards_policy": {
                 "discover_card": 5,
                 "free pile": 1,
                 "extend sequence": 0.2,
-                "deal cards": -0.2
+                "deal cards": -0.4, 
+                "step":-0.2
             }
         },
 		{
 			"rewards_policy": {
-				"discover_card": 5,
+				"discover_card": 2,
 				"free pile": 1,
 				"extend sequence": 0.2,
-				"deal cards": -0.2
+				"deal cards": -0.2, 
+                "step":-0.2
 			}
 		},
+        {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.2,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
+
+
+                {
+            "rewards_policy": {
+                "discover_card": 5,
+                "free pile": 1,
+                "extend sequence": 0.1,
+                "deal cards": -0.4, 
+                "step":-0.2
+            }
+        },
 		{
 			"rewards_policy": {
-				"discover_card": 5,
+				"discover_card": 2,
 				"free pile": 1,
-				"extend sequence": 0.2,
-				"deal cards": -0.2
+				"extend sequence": 0.1,
+				"deal cards": -0.2, 
+                "step":-0.2
 			}
 		},
+        {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.1,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
+         {
+            "rewards_policy": {
+                "discover_card": 5,
+                "free pile": 1,
+                "extend sequence": 0.1,
+                "deal cards": -0.4, 
+                "step":-0.2
+            }
+        },
+		{
+			"rewards_policy": {
+				"discover_card": 2,
+				"free pile": 1,
+				"extend sequence": 0.1,
+				"deal cards": -0.2, 
+                "step":-0.2
+			}
+		},
+        {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.1,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
                 {
             "rewards_policy": {
                 "discover_card": 5,
                 "free pile": 1,
                 "extend sequence": 0.2,
-                "deal cards": -0.2
+                "deal cards": -0.4, 
+                "step":-0.2
             }
         },
+		{
+			"rewards_policy": {
+				"discover_card": 2,
+				"free pile": 1,
+				"extend sequence": 0.2,
+				"deal cards": -0.2, 
+                "step":-0.2
+			}
+		},
         {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.2,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
+         {
             "rewards_policy": {
                 "discover_card": 5,
                 "free pile": 1,
                 "extend sequence": 0.2,
-                "deal cards": -0.2
+                "deal cards": -0.4, 
+                "step":-0.2
             }
         },
 		{
 			"rewards_policy": {
-				"discover_card": 5,
+				"discover_card": 2,
 				"free pile": 1,
 				"extend sequence": 0.2,
-				"deal cards": -0.2
+				"deal cards": -0.2, 
+                "step":-0.2
 			}
 		},
-		{
-			"rewards_policy": {
-				"discover_card": 5,
-				"free pile": 1,
-				"extend sequence": 0.2,
-				"deal cards": -0.2
-			}
-		},
-        
+        {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.2,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
 
-        {
-            "rewards_policy": {
-                "discover_card": 2,
-                "free pile": 1,
-                "extend sequence": 0.2,
-                "deal cards": -0.2
-            }
-        },
-        {
-            "rewards_policy": {
-                "discover_card": 2,
-                "free pile": 1,
-                "extend sequence": 0.2,
-                "deal cards": -0.2
-            }
-        },
-		{
-			"rewards_policy": {
-				"discover_card": 2,
-				"free pile": 1,
-				"extend sequence": 0.2,
-				"deal cards": -0.2
-			}
-		},
-		{
-			"rewards_policy": {
-				"discover_card": 2,
-				"free pile": 1,
-				"extend sequence": 0.2,
-				"deal cards": -0.2
-			}
-		},
+
                 {
             "rewards_policy": {
-                "discover_card": 2,
+                "discover_card": 5,
                 "free pile": 1,
-                "extend sequence": 0.2,
-                "deal cards": -0.2
+                "extend sequence": 0.1,
+                "deal cards": -0.4, 
+                "step":-0.2
             }
         },
+		{
+			"rewards_policy": {
+				"discover_card": 2,
+				"free pile": 1,
+				"extend sequence": 0.1,
+				"deal cards": -0.2, 
+                "step":-0.2
+			}
+		},
         {
             "rewards_policy": {
                 "discover_card": 2,
                 "free pile": 1,
-                "extend sequence": 0.2,
-                "deal cards": -0.2
+                "extend sequence": 0.1,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        },
+         {
+            "rewards_policy": {
+                "discover_card": 5,
+                "free pile": 1,
+                "extend sequence": 0.1,
+                "deal cards": -0.4, 
+                "step":-0.2
             }
         },
 		{
 			"rewards_policy": {
 				"discover_card": 2,
 				"free pile": 1,
-				"extend sequence": 0.2,
-				"deal cards": -0.2
+				"extend sequence": 0.1,
+				"deal cards": -0.2, 
+                "step":-0.2
 			}
 		},
-		{
-			"rewards_policy": {
-				"discover_card": 2,
-				"free pile": 1,
-				"extend sequence": 0.2,
-				"deal cards": -0.2
-			}
-		}
-
-
-
-	]
+        {
+            "rewards_policy": {
+                "discover_card": 2,
+                "free pile": 1,
+                "extend sequence": 0.1,
+                "deal cards": -0.2, 
+                "step":-0.4
+            }
+        }
+ 	]
 }

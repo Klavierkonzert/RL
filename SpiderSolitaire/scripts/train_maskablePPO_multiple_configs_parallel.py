@@ -1,3 +1,8 @@
+# my personal note:
+# activate venv `myenv` from conda powershell: conda activate C:\Users\alex3\.conda_envs\rl_env
+# then run this srcript:                       python .\SpiderSolitaire\scripts\train_maskablePPO_multiple_configs_parallel.py
+# 
+ 
 import os
 
 import json
@@ -130,7 +135,7 @@ def train_maskable_ppo_parallel(agent_configs: dict[str, int], env_configs: dict
 
         rew_codes = [''.join('_'+k[0]+(k[k.rfind(' ')+1] if k.rfind(' ') else '')+str(round(v,1))  for k, v in config['rewards_policy'].items() ) 
                         for config in process_env_configs]
-        agent_cfg_codes = [f"{config['n_steps']}_{config['batch_size']}" for config in process_agent_configs]   
+        agent_cfg_codes = [f"{config['n_steps']}_{config['batch_size']}_{config.get('gamma', default_gamma)}" for config in process_agent_configs]   
 
         model_aliases =  [f"MaskablePPO_{n_suits}suits_{env_actions_limit}_{agent_cfg_code}_{rew_code}" for agent_cfg_code, rew_code in zip(agent_cfg_codes, rew_codes)]
         
@@ -180,8 +185,8 @@ if __name__ == "__main__":
     parser.add_argument('--n_suits', type=int, default=1)
     parser.add_argument('--log_dir', type=str, default=None)
     parser.add_argument('--save_dir', type=str, default=None)
-    parser.add_argument('--actions_limit', type=int, default=1000)
-    parser.add_argument('--total_timesteps', type=int, default=1_000_000)
+    parser.add_argument('--actions_limit', type=int, default=1024)
+    parser.add_argument('--total_timesteps', type=int, default=1024*1024)
 
     parser.add_argument('--verbose', type=int, default=0)   
 
