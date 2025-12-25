@@ -3,6 +3,7 @@
 # then run this srcript:                       python .\SpiderSolitaire\scripts\train_maskablePPO_multiple_configs_parallel.py
 # 
  
+import math
 import os
 
 import json
@@ -105,10 +106,30 @@ def train_maskable_ppo_parallel(agent_configs: dict[str, int], env_configs: dict
                                 save_dir: str=None, __save_dir: str=SAVE_MODELS_DIR+"MaskablePPO_multiple_configs_parallel/", 
                                 verbose: int =0
                                 ):
-    """Train MaskablePPO on Spider Solitaire environment with different configs running in parallel."""
-    assert len(agent_configs) == len(env_configs), "Number of agent configs must match number of environment configs."
+    """Train MaskablePPO on Spider Solitaire environment with different configs running in parallel. 
+    
+    If number of env configs is less than number of agent configs, the env configs are broadcasted to match the number of agent configs: env configs will alternate sequentially among the agent configs. 
+    If number of env configs matches number of agent configs, they are paired one-to-one.
+    In number of env configs exceeds number of agent configs, 
+    """
+    assert len(agent_configs) >0 and len(env_configs) >0, "At least one agent config and one environment config must be provided."
     assert all('n_steps' in cfg for cfg in agent_configs), "Each agent config must specify 'n_steps'."
     assert all('batch_size' in cfg for cfg in agent_configs), "Each agent config must specify 'batch_size'."
+
+
+    if len(env_configs)<len(agent_configs):
+        # Broadcast single env config to all agent configs
+        n_repeats=math.ceil(len(agent_configs)/len(env_configs))
+        print(f"Broadcasting {len(env_configs)} environment configs to match {len(agent_configs)} agent configs. At least one env config will be used {n_repeats} times.\n")
+        env_configs = env_configs * n_repeats
+        env_configs = env_configs[:len(agent_configs)] 
+
+    elif len(env_configs)>len(agent_configs):
+        # Broadcast agent configs to match env configs
+        n_repeats=math.floor(len(env_configs)/len(agent_configs))
+        print(f"Broadcasting {len(agent_configs)} environment configs to match {len(env_configs)} agent configs. At least one env config will be used {n_repeats} times.\n")
+        agent_configs =  agent_configs * n_repeats
+        agent_configs = agent_configs[:len(env_configs)]
 
     if log_dir is None:
         print(f"No log_dir provided, using default {__log_dir}")
@@ -134,9 +155,9 @@ def train_maskable_ppo_parallel(agent_configs: dict[str, int], env_configs: dict
         process_env_configs   = [cfg for i, cfg in enumerate(env_configs)   if i % n_processes == i_process]
 
         special_codes = {'discover card': 'dd'}
-        rew_codes = [''.join('_'+ (k[0]+(k[k.rfind(' ')+1] if k.rfind(' ') else '')) if k not in special_codes else special_codes[k] + str(round(v,1))  for k, v in config['rewards_policy'].items() ) 
+        rew_codes = [''.join('_'+ ((k[0]+(k[k.rfind(' ')+1] if k.rfind(' ') else '')) if k not in special_codes else special_codes[k]) + str(round(v,5))  for k, v in config['rewards_policy'].items() ) 
                         for config in process_env_configs]
-        agent_cfg_codes = [f"{config['n_steps']}_{config['batch_size']}_{config.get('gamma', default_gamma)}" for config in process_agent_configs]   
+        agent_cfg_codes = [f"{config['n_steps']}_{config['batch_size']}_{config.get('gamma', default_gamma)}_{config.get('lr', default_learning_rate)}" for config in process_agent_configs]   
 
         model_aliases =  [f"MaskablePPO_{n_suits}suits_{env_actions_limit}_{agent_cfg_code}_{rew_code}" for agent_cfg_code, rew_code in zip(agent_cfg_codes, rew_codes)]
         
@@ -176,18 +197,13 @@ if __name__ == "__main__":
     parser.add_argument('--configs_file_path', type=str, required=False,
                              help="Path to JSON file containing list of agent and environment configs.", 
                              default=None)
-    if parser.parse_args().configs_file_path is None:
-        config_filepath = './SpiderSolitaire/scripts/ppo_multiple_configs.json'
-        print(f"No configs file path provided, using default {config_filepath}")
-        
-    else:
-        config_filepath = parser.parse_args().configs_file_path
     parser.add_argument('--n_processes', type=int, default=os.cpu_count() if os.cpu_count() is not None else 1)
     parser.add_argument('--n_suits', type=int, default=1)
     parser.add_argument('--log_dir', type=str, default=None)
     parser.add_argument('--save_dir', type=str, default=None)
     parser.add_argument('--actions_limit', type=int, default=1024)
-    parser.add_argument('--total_timesteps', type=int, default=1024*1024)
+    parser.add_argument('--total_timesteps', type=int, default=1024*1024,
+                        help="Total timesteps per agent config if not specified in the config.")
 
     parser.add_argument('--verbose', type=int, default=0)   
 
@@ -195,6 +211,12 @@ if __name__ == "__main__":
     parser.add_argument('--gamma', type=float, default=0.995)
 
     args = parser.parse_args()
+
+    if args.configs_file_path is None:
+        config_filepath = './SpiderSolitaire/scripts/ppo_multiple_configs.json'
+        print(f"No configs file path provided, using default {config_filepath}")
+    else:
+        config_filepath = args.configs_file_path
 
     # # Parse rewards_policy robustly: accept JSON (double quotes) or Python dict literal (single quotes)
     # import ast
