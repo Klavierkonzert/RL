@@ -237,7 +237,7 @@ class SpiderSpace(gym.spaces.Box):
     @staticmethod
     def _get_max_sequences_depths(tableau_piles: npt.NDArray[np.integer],
                                     __HIGHEST_CARD = HIGHEST_CARD, __NONCARD_VALUE=NONCARD_VALUE, __HIDE_VALUE=HIDE_VALUE,
-                                    __DTYPE=DTYPE
+                                    _dtype=DTYPE
                                     ) -> npt.NDArray[np.integer]:
         """Accepts a valid game state (tableau piles). Supports also a vactorized form of tableau_piles (in this case returns 3D tensor with depths corresponding to a top suit cards)
             Instance for 3D case:
@@ -271,19 +271,19 @@ class SpiderSpace(gym.spaces.Box):
             
             # print(bnd_coords)
             #selecting zero diffs before bnds (when cards are of same rank) and hiding them:
-            #cols_mask = (np.arange(d.shape[1], dtype=__DTYPE) < bnd_coords[1][:,None]) & np.all(d==0, axis=ar_axis+1)# (d.shape[0],d.shape[1])
+            #cols_mask = (np.arange(d.shape[1], dtype=_dtype) < bnd_coords[1][:,None]) & np.all(d==0, axis=ar_axis+1)# (d.shape[0],d.shape[1])
             
             # print(d[:2])
             if len(tableau_piles.shape)>2:
-                #cols_mask = (np.arange(d.shape[1], dtype=__DTYPE) < bnd_coords[1][:,None])[...,None] & (d[bnd_coords[0]]==__NONCARD_VALUE)
-                cols_mask = (np.arange(d.shape[1], dtype=__DTYPE) < bnd_coords[1][:,None]) & np.all(d[bnd_coords[0]]==__NONCARD_VALUE, axis=-1)
+                #cols_mask = (np.arange(d.shape[1], dtype=_dtype) < bnd_coords[1][:,None])[...,None] & (d[bnd_coords[0]]==__NONCARD_VALUE)
+                cols_mask = (np.arange(d.shape[1], dtype=_dtype) < bnd_coords[1][:,None]) & np.all(d[bnd_coords[0]]==__NONCARD_VALUE, axis=-1)
                 
                 r, c, *_rest_dim = np.nonzero(cols_mask)
             else: 
                 # print(bnd_coords)
-                # print(np.arange(d.shape[1], dtype=__DTYPE) < bnd_coords[1][:,None])
+                # print(np.arange(d.shape[1], dtype=_dtype) < bnd_coords[1][:,None])
                 # print(d)
-                cols_mask = (np.arange(d.shape[1], dtype=__DTYPE) < bnd_coords[1][:,None]) & (d[bnd_coords[0]]==__NONCARD_VALUE)
+                cols_mask = (np.arange(d.shape[1], dtype=_dtype) < bnd_coords[1][:,None]) & (d[bnd_coords[0]]==__NONCARD_VALUE)
                 r, c = np.nonzero(cols_mask)
                 
             # print(np.squeeze(np.all(d==0, axis=1)))
@@ -313,9 +313,9 @@ class SpiderSpace(gym.spaces.Box):
         
         d[np.nonzero(d==-1)] = __NONCARD_VALUE
         #print(d)
-        consequtive_zeros = (np.flip(d, axis=ar_axis)==__NONCARD_VALUE).cumprod(axis=ar_axis).sum(axis=ar_axis)
+        consequtive_zeros = (np.flip(d, axis=ar_axis)==__NONCARD_VALUE).cumprod(axis=ar_axis).sum(axis=ar_axis, dtype=_dtype)
         # depths = n consequitive zeros - n of zeros in the tableu_piles
-        depths = consequtive_zeros- (np.flip(tableau_piles, axis=ar_axis)==__NONCARD_VALUE).cumprod(axis=ar_axis).sum(axis=ar_axis)+1 # subtracting num of zeros in tableau_piles
+        depths = consequtive_zeros- (np.flip(tableau_piles, axis=ar_axis)==__NONCARD_VALUE).cumprod(axis=ar_axis).sum(axis=ar_axis, dtype=_dtype)+1 # subtracting num of zeros in tableau_piles
         return depths
 
     @staticmethod

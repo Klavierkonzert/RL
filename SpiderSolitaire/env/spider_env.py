@@ -1,3 +1,5 @@
+from collections import Counter
+from time import time
 import typing
 import numpy as np
 import numpy.typing as npt
@@ -33,16 +35,29 @@ class SpiderEnv(gym.Env):
     NONCARD_VALUE = SpiderSpace.NONCARD_VALUE
     #metadata = {"render.modes": ["human"]}
 
+    SUN_REWARDS = {"complete sequence": 50,
+                     "discover card": 10,
+                     "free pile": 15,
+                     'extend sequence': 2
+                    }
+    MICROSOFT_REWARDS = {"initial score": 500,
+                         "complete sequence": 100,
+                          "step": -1
+                        }
+    
     DEFAULT_REWARDS = {"complete sequence": 100.0,
                        "victory": N_PILES*100.0,
                        'step':-0.2,
                        "NOOP": -0.4,
                       "discover card": 8.0,
-                      "extend sequence": 2.0,
+                      "extend sequence": 0, # for backward compatibility
+                      "combine sequences": 0, # for backward compatibility
                       "deal cards": 0.,
-                      "free pile": 32,
-                      'no available actions': -100,
-                       "reward limit": 200
+                      "free pile": 0, # for backward compatibility
+                      'no available actions': 0, # for backward compatibility
+                       "reward limit": 200, 
+                        "revisit state": 0,# for backward compatibility
+                        "revisit state limit": 0 # for backward compatibility
                       }
     # no needto keep this dict, as only one limit matters (for extending sequences)
     # DEFAULT_REWARDS_LIMITS = {"complete sequence": 100.0,
@@ -59,8 +74,8 @@ class SpiderEnv(gym.Env):
     def __init__(self, n_suits: int=4, n_actions_limit:int=None, 
                  vectorize_obs: bool=False,
                  mask_legal_actions:bool=False,
-                 rewards_policy: dict[str, float|int]=None,
-                 rewards_limits:dict[str, float]=None,
+                 rewards_policy: dict[str, float|int]|str=None,
+                 #rewards_limits:dict[str, float]=None,
                  _render_state_timeout:int=None, _diagnostics_mode:bool=False,
                  _maxsize: int = 64, _dtype=np.int8):
         """"...
@@ -70,6 +85,19 @@ class SpiderEnv(gym.Env):
             vectorize_obs: bool=False - if True, `get_obs` method yields observations in 3D-form array (thus each card is represented by a [0,...,rank,..,0] 4-vector), this does not affect interna enviroment calculations which are done in 2D (i.e. each card is represented by an integer)
             mask_legal_actions: bool=False - if True, each `step` a mask for legal moves is computed within `get_info` method
                  
+            rewards_policy: dict[str, float|int]|str=None - dictionary which defines coefficients for different reward components. If None, default rewards policy is used. See `SpiderEnv.DEFAULT_REWARDS` for reference.
+                if rewards_policy=='sun', the following policy is used:
+                    {"complete sequence": 50,
+                     "discover card": 10,
+                     "free pile": 15,
+                     'extend sequence': 2
+                    }, and _get_reward_sun method is used to compute rewards. Additionally, if more than 3 suits were completed, 2 points are given for each additional completed suit.
+                if rewards_policy=='microsoft',
+                    {"initial score": 500,
+                     "complete sequence": 100,
+                      "step": -1
+                    } is used.
+                    
             _render_state_timeout:int=None 
             _maxsize: int = 64, _dtype=np.int8
         """
@@ -97,15 +125,32 @@ class SpiderEnv(gym.Env):
 
         self._mask_legal_actions = mask_legal_actions
 
+        self._score = 0.0
+        self._reward_fn = self._get_reward_default
         ################ rewards ##################################
         if rewards_policy is not None:
-            self._rewards_policy = {**SpiderEnv.DEFAULT_REWARDS ,**rewards_policy}
+            if type(rewards_policy)==str:
+                if rewards_policy.lower()=='sun':
+                    self._rewards_policy = SpiderEnv.SUN_REWARDS.copy()
+                    self._reward_fn = self._get_reward_sun
+                elif rewards_policy.lower()=='microsoft':
+                    self._rewards_policy = SpiderEnv.MICROSOFT_REWARDS.copy()
+                    self._score = self._rewards_policy.get("initial score", 0.0)
+                    self._reward_fn = self._get_reward_microsoft
+                else:
+                    raise ValueError(f"Unknown rewards policy string: '{rewards_policy}'. Supported strings are: 'sun', 'microsoft'.")
+            else:
+                self._rewards_policy = {**SpiderEnv.DEFAULT_REWARDS ,**rewards_policy}
         else:
-            self._rewards_policy = SpiderEnv.DEFAULT_REWARDS 
+            self._rewards_policy = SpiderEnv.DEFAULT_REWARDS.copy() 
 
-        if rewards_limits is not None:
-            # if set, rewards are extracted every time from these limits
-            self.rewards_limits=rewards_limits
+        #if rewards_limits is not None:
+        #    # if set, rewards are extracted every time from these limits
+        #    self.rewards_limits=rewards_limits
+
+        # memory of visited states
+        self._visited_states = Counter()  # to cache previously computed state-action pairs
+
         ###################################################################
 
         ## introduced to avoid heavy recalculations of actuons mask
@@ -129,8 +174,10 @@ class SpiderEnv(gym.Env):
         self._stock_len = __N_STOCK_CARDS
         self._facedown_tableau_cards=__N_FACEDOWN_CARDS
         
-
+        self._score = self._rewards_policy.get("initial score", 0.0)
         #self._action_mask = self._get_action_mask()
+
+        self._visited_states = Counter()  # to cache previously computed states
 
         #initial visible observation
         obs = self.get_obs()
@@ -172,47 +219,137 @@ class SpiderEnv(gym.Env):
         if self._mask_legal_actions:
              d['action_mask'] = self.get_action_mask()
         return d
-
+    def get_score(self) -> float:
+        """Returns cumulative score (sum of rewards) obtained in the current episode."""
+        return self._score
     def get_rewards_policy(self):
         """Getter for `rewards_policy` attribute"""
         return self._rewards_policy.copy()
-    def _get_reward(self, action:int, 
-                    terminated, truncated,
-                    tableau_piles,
-                    n_completed_seqs, 
-                    init_stock_cards,
-                    init_facedown_cnts, facedown_counts,
-                    init_depths,        seq_depths,
-                    init_tableau_cards,
+    def _get_reward(self, *args, **kwargs) -> float:
+        """Wrapper for different reward policies"""
+        return self._reward_fn(*args, **kwargs)
+        
+    def _get_reward_sun(self, action:int, action_res: bool,
+                            terminated, truncated,
+                            n_completed_seqs, 
+                            init_stock_cards,
+                            init_facedown_cnts,
+                            init_depths,
+                            init_tableau_cards,
+                            __N_TARGETS=N_TARGETS, 
+                        __MAX_SEQ_DEPTH=SpiderSpace.HIGHEST_RANK - SpiderSpace.LOWEST_CARD +1
+                        ) -> float:
+        """Reward policy as used in SUN MICROSYSTEMS version of Spider Solitaire game. 
+            If more than 3 suits were completed, 2 points are given for each additional completed suit.
+        """
+        reward= 0
+        if n_completed_seqs:
+            reward += self._rewards_policy["complete sequence"] * n_completed_seqs
+            if self._complete_sequences>3:
+                reward += 2 * (self._complete_sequences -3)
+
+        if (n_freed_piles := (init_facedown_cnts[init_facedown_cnts==1] - (self.counts[:__N_TARGETS])[init_facedown_cnts==1]).sum()) > 0:
+            reward += self._rewards_policy["free pile"] * n_freed_piles
+
+        #the following reward is given only if one of sequences is extended but not completed
+        diff_depths = self.seq_depths - init_depths 
+        if np.all(diff_depths>0):
+            reward += self._rewards_policy["extend sequence"] * diff_depths[self.seq_depths<__MAX_SEQ_DEPTH].sum()
+        return reward
+    
+    def _get_reward_microsoft(self, action:int, action_res: bool,
+                                terminated, truncated,
+                                n_completed_seqs, 
+                                init_stock_cards,
+                                init_facedown_cnts,
+                                init_depths,
+                                init_tableau_cards) -> float:
+        """Reward policy as used in MICROSOFT version of Spider Solitaire game. 
+            Initial score is 500 points, each completed sequence gives 100 points, each step costs 1 point.
+        """
+        reward= 0
+        reward += self._rewards_policy["step"] 
+
+        if n_completed_seqs:
+            reward += self._rewards_policy["complete sequence"] * n_completed_seqs
+
+        return reward
+
+    def _get_reward_default(self, action:int, action_res: bool,
+                            terminated, truncated,
+                            n_completed_seqs, 
+                            init_stock_cards,
+                            init_facedown_cnts,
+                            init_depths,
+                            init_tableau_cards,
                     __N_TARGETS=N_TARGETS, __NONCARD_VALUE=NONCARD_VALUE, 
                     __MOVE_ACTIONS_RANGE=MOVE_ACTIONS_RANGE, __DEAL_CARDS_ACTION = DEAL_CARDS_ACTION, __NOOP_ACTION=NOOP_ACTION
                    ) -> float:
         """Accumulates rewards for changing game state based on the following indicators:
+                - revisiting previously visited states (punishment)
                 - number of comleted sequences
                 - extended sequences (if one of sequences increased)
-                - one of piles become free
+                - discovered cards (facedown -> faceup)
                 - when dealing cards (punishment)
-                """
+
+        :params:
+            action:int - action taken at the current step
+            action_res: bool - whether the action was successful. NOOP is considered unsuccessful action. Right now it's a placeholder for future use.
+            ...
+
+
+        """
         reward= 0
-        if action is not None:
-            if n_completed_seqs:
+        if action is not None:                
+            tableau_piles, stock_pile, facedown_counts, seq_depths = self._unpack_state(self._internal_state)
+
+            move_src, move_dst, move_len = SpiderEnv._unflatten_move_action(action) if action<__MOVE_ACTIONS_RANGE else (None, None, None)
+
+            if self._rewards_policy.get('revisit state', False):
+                state_hash = self._state_hash(action=action)
+                if self._has_visited_state(state_hash):
+                    # punishment for revisiting states
+                    if not self._rewards_policy.get('revisit state limit', False): # unlimited punishment
+                        reward += self._rewards_policy['revisit state'] * self._visited_states[state_hash]
+                    else: #clipped punishment
+                        if self._rewards_policy['revisit state']<0: # clipped punishment
+                            reward += max(self._rewards_policy['revisit state'] * self._visited_states[state_hash], self._rewards_policy['revisit state limit'])  
+                        else:
+                            reward += min(self._rewards_policy['revisit state'] * self._visited_states[state_hash], self._rewards_policy['revisit state limit']) 
+
+                else: # visitid a new state
+                    # reward for freeing a pile
+                    tab_cards = np.count_nonzero(tableau_piles-__NONCARD_VALUE, axis=1)
+                    n_freed_piles = ((tab_cards==0) & (tab_cards - init_tableau_cards<1)).sum()
+                        
+                    ##_extend_sequence_reward coulbe used here - implemented below
+                    #reward+= self._rewards_policy["free pile"]*n_freed_piles
+                    ##!!!to inttroduce this reward, prevent an agent from moving sequences back and forth:
+
+                    # IF seq depth is increased when moving a sequence, give a reward.
+                    # discovered sequences are not counted here
+                    diff_depths = seq_depths - init_depths 
+                    if self._rewards_policy.get('extend sequence', False) and np.all(diff_depths>0):
+                        reward += self._rewards_policy['extend sequence'] * diff_depths.sum()
+                    elif 0<=action<__MOVE_ACTIONS_RANGE and self._rewards_policy.get('combine sequences', False) and diff_depths[move_dst]==-diff_depths[move_src]+1:
+                        reward += self._rewards_policy['combine sequences'] * diff_depths[move_dst]
+                    # there can be a reward for removing a card from the top of a 'hidden' sequence (covered by this card)
+                    # ...
+                self._visited_states[state_hash] += 1
+
+            if n_completed_seqs and self._rewards_policy.get('complete sequence', False):
                 reward += self._rewards_policy['complete sequence']*(n_completed_seqs)
                     
-            reward += self._rewards_policy['discover card']*(init_facedown_cnts - facedown_counts[:__N_TARGETS]).sum()
-            #if action<=__MOVE_ACTIONS_RANGE: #if not deal cards action
-            # IF seq depth is increased
-            diff_depths = init_depths - seq_depths
-            reward += self._rewards_policy['extend sequence'] * diff_depths.sum() if np.all(diff_depths>0) else 0
-                
-            # reward for freeing a pile
-            tab_cards = np.count_nonzero(tableau_piles-__NONCARD_VALUE, axis=1)
-            n_freed_piles = ((tab_cards==0) & (tab_cards-init_tableau_cards<1)).sum()
-                
-            ##_extend_sequence_reward coulbe used here
-            #reward+= self._rewards_policy["free pile"]*n_freed_piles
-            ##to inttroduce this reward, prevent an agent from moving sequences back and forth
+            if self._rewards_policy.get('discover card', False):
+                reward += self._rewards_policy['discover card']*(init_facedown_cnts - facedown_counts[:__N_TARGETS]).sum()
+                #if action<=__MOVE_ACTIONS_RANGE: #if not deal cards action
+            #in this implementation, freeing a pile is rewarded only once per pile (max N_PILES=10 times per game)
+            if self._rewards_policy.get('free pile', False):
+                n_freed_piles = (init_facedown_cnts[init_facedown_cnts==1] - facedown_counts[:__N_TARGETS][init_facedown_cnts==1]).sum()
+                reward+= self._rewards_policy["free pile"]*n_freed_piles
 
-            if action==__DEAL_CARDS_ACTION and "deal cards" in self._rewards_policy and self._rewards_policy["deal cards"]!=0:
+
+            if action==__DEAL_CARDS_ACTION and self._rewards_policy.get("deal cards", False):
                 # punish for dealing cards:
                 coefff =  self._rewards_policy["deal cards"]
                 if type(coefff)==tuple:
@@ -230,10 +367,10 @@ class SpiderEnv(gym.Env):
             ##punishment if no available actions left
             #elif  action==__NOOP_ACTION and not terminated and "no available actions" in self._rewards_policy : 
             #    reward += self._rewards_policy['no available actions'] *(__N_TARGETS-self._complete_sequences )* ((self._actions_limit-self._actions_counter)/self._actions_limit if self._actions_limit is not None else 1)
-            elif  action==__NOOP_ACTION and not terminated and "no available actions" in self._rewards_policy:
-                reward +=self._rewards_policy['NOOP']
+            elif  action==__NOOP_ACTION and not terminated and  self._rewards_policy.get('no available actions', False):
+                reward +=self._rewards_policy['no available actions']
             
-            if 'step' in self._rewards_policy:
+            if self._rewards_policy.get('step', False):
                 reward += self._rewards_policy['step'] # punisment for a step
                 
         # else:
@@ -245,13 +382,55 @@ class SpiderEnv(gym.Env):
             # if truncated:
             #     reward -= (__N_TARGETS-self._complete_sequences)**2 
         # reward for victory:
-        if self._complete_sequences == __N_TARGETS and 'victory' in self._rewards_policy:
+        if self._complete_sequences == __N_TARGETS and self._rewards_policy.get('victory', False):
             reward += self._rewards_policy['victory']
 
+        if reward!=0 and self._diagnostics_mode>=2:
+            print(f"Reward computed: {reward} for action: '{SpiderEnv.action_to_string(action)}'")
         return reward
 
 
+    def _state_hash(self, action:int=None, _dtype=None,
+                       __NONCARD_VALUE = SpiderSpace.NONCARD_VALUE) -> None:
+        """Hashes current state in the internal states cache.
+        The state is hashed based on the following features:
+
+            - top cards in each tableau pile (sorted)
+            - number of facedown cards in each tableau pile (sorted according to top cards)
+            - depths of sequences in each tableau pile (sorted according to top cards)
+            - number of cards left in stock pile
+            - action taken (if provided)
+        
+        :param action: action taken in the current state. If provided, it is included in the hash.
+        :param _dtype: data type for the state description array used for hashing. Default is None, which means the data type of tableau piles is used.
+        
+        """
+        tableau_piles, stock_pile, facedown_counts, seq_depths = self._unpack_state(self._internal_state)
+        
+        stock_len = len(stock_pile[stock_pile!=__NONCARD_VALUE])
+        stock_len = np.array(stock_len,           dtype=tableau_piles.dtype if _dtype is None else _dtype)
+
+        top_cards = tableau_piles[SpiderSpace._get_top_cards_indices(tableau_piles)]
+        order = np.argsort(top_cards)
+
+        if _dtype is not None:
+            top_cards = top_cards.astype(_dtype)
+            facedown_counts = facedown_counts.astype(_dtype)
+            seq_depths = seq_depths.astype(_dtype)
+
+        action_hash = np.hstack([top_cards[order],facedown_counts[order], seq_depths[order], stock_len]).tobytes()
+        if action is not None:
+            action_array = np.array(action, dtype=np.int16)
+            action_hash += action_array.tobytes()
             
+        return action_hash
+        
+
+    def _has_visited_state(self, state_hash: int) -> int:
+        """Checks if the given state hash is present in the internal states cache. 
+        If present, returns the number of times the state has been visited, otherwise returns 0."""
+        return self._visited_states.get(state_hash, 0)
+
     def step(self, action:int,
             __N_TARGETS=N_TARGETS, __NONCARD_VALUE=NONCARD_VALUE, 
             __NOOP_ACTION=NOOP_ACTION)-> tuple[npt.NDArray[np.integer], float, bool, bool, dict[str,typing.Any]]:
@@ -291,14 +470,16 @@ class SpiderEnv(gym.Env):
 
             
             # reward will be based on number of completed sequences            
-            reward = self._get_reward(action if action_res else None,
+            reward = self._get_reward(action, action_res,
                                       terminated, truncated,
-                                      tableau_piles,
                                       n_completed_seqs,
                                       init_stock_cards,
-                                      init_facedown_cnts, facedown_counts,
-                                      init_depths,        seq_depths,
+                                      init_facedown_cnts,
+                                      init_depths,
                                       init_tableau_cards)
+            
+            self._score += reward # sum of all rewards obtained in the current episode
+
             if reward>(self._rewards_policy["complete sequence"]//4) and self._diagnostics_mode>0.75 or reward>self._rewards_policy["complete sequence"]//2 and self._diagnostics_mode>2:
                 print('action ', self._unflatten_move_action(action)if  0<=action<self.action_space.n else action)
                 print('reward',  reward)
@@ -312,8 +493,6 @@ class SpiderEnv(gym.Env):
                                       init_depths={init_depths},        seq_depths={seq_depths},\
                                       init_tableau_cards={init_tableau_cards} ")
             #if self._diagnostics_mode>=1 and action==__NOOP_ACTION:
-                
-                
                 
             obs = self.get_obs()
             
@@ -858,7 +1037,9 @@ class SpiderEnv(gym.Env):
     #     tableau_piles, stock_pile, counts = self._unpack_state(self._internal_state)
     #     return np.all(counts == np.count_nonzero(self._internal_state[:SpiderEnv+1], axis=1))
     
-    def render(self,  fancy_mode:bool=True, 
+    def render(self,  
+               action: int|None=None,
+               fancy_mode:bool=True, 
                print_auxillary_info: bool=False, show_agents_obs: bool=False, 
                __HIDE_VALUE=SpiderSpace.HIDE_VALUE):
         """"Renders observed state. Example of output:
@@ -882,12 +1063,20 @@ class SpiderEnv(gym.Env):
         else:
             print("<empty tableau>")
         if print_auxillary_info:
+            if action is not None and self._rewards_policy.get('revisit state', False):
+                state_hash = self._state_hash(action=action)
+                n_visits = self._has_visited_state(state_hash) 
+                if n_visits>1:
+                    print(f" The current state has been visited before {n_visits} times (hash={state_hash}) ")
+
             print(f"Face-down cards counts: {counts}")
             print(f"Depths of top sequences: {depths}")
             print("Cards in stock: "+" ".join(f_card2str(card - __HIDE_VALUE) for card in stock[:counts[-1]]))
 
         if show_agents_obs:
             print(f"Agent's observations: {SpiderEnv._unpack_state(self.get_obs())}")
+        
+        print('\n')
     # implement if any external resources are used by env, like an open window when rendering
     # def close(self):
     #     if self.window is not None:
@@ -897,6 +1086,7 @@ class SpiderEnv(gym.Env):
 
     def user_play(self, render_mode:str='fancy', 
                   _show_agents_obs: bool=False,
+                  _show_rewards: bool=False,
                   __N_TARGETS=SpiderSpace.N_TARGETS,
         inactivity_timeout: int|None=20) -> bool:
         """Test function. Type 'exit' to escape. 
@@ -912,7 +1102,7 @@ class SpiderEnv(gym.Env):
     
             res= False
             if len(l_action):
-                if l_action[0]=='exit':
+                if l_action[0] in ('exit', 'quit', 'q'):
                     return False
                                 
                 s_func = l_action[0]
@@ -921,10 +1111,15 @@ class SpiderEnv(gym.Env):
                     args = [int(a) for a in l_action[1:]]
                     if len(args)==2:
                         args.append(1)
-                    res = d_actions[s_func](*args)
+                    #res = d_actions[s_func](*args)
+                    i_action = self._flatten_move_action(*args)
                 else:
-                    res = d_actions[s_func]()
+                    #res = d_actions[s_func]()
+                    i_action = SpiderEnv.DEAL_CARDS_ACTION
+                obs, reward, terminated, truncated, info = self.step(i_action)
 
+                if _show_rewards:
+                    print(f"earned reward: { reward }")
                 #check whether any sequence has been completed:
                 self._discard_complete_sequences()
                 
@@ -932,7 +1127,7 @@ class SpiderEnv(gym.Env):
                     print("\nVictory! You completed all the {__N_TARGETS} sequences! Congratulations!")
                     return True
                 
-            if not len(l_action) or res:
+            if not len(l_action):# or res:
                 clear_output()
                 self.render(fancy_mode=(render_mode=='fancy'), 
                          print_auxillary_info=True,
@@ -940,11 +1135,12 @@ class SpiderEnv(gym.Env):
     def random_play(self, render_mode:str='fancy', 
         n_max_iterations: int=50000,
                     verbosity: int=1,
-                    _render_state_timeout:int=0, _diagnostic_mode:bool=False,
+                    _render_state_timeout:int=0, 
+                    _sleep_time:float=0.0,
+                    _diagnostic_mode:bool=False,
                     _sample_valid_actions_only: bool=True, 
                     _show_agents_obs: bool=False,
-                    __N_TARGETS=SpiderSpace.N_TARGETS,
-                    inactivity_timeout: int|None=60) -> bool:
+                    __N_TARGETS=SpiderSpace.N_TARGETS) -> bool:
         """Test function.
             Returns True if all the N_TARGETS sequences were completed (victory), False otherwise. """
         cum_rew = 0
@@ -958,17 +1154,17 @@ class SpiderEnv(gym.Env):
             cum_rew+=reward
 
             #diagnostic info
-            if verbosity>1:
-                if _render_state_timeout and  game_iter %_render_state_timeout==0:
-                    if not _diagnostic_mode:
-                        clear_output()
-                    if verbosity>2:
-                        print('action ', self._unflatten_move_action(a)if  0<=a<self.action_space.n else a)
-                        print('reward',  reward)
-                        #print('terminated', terminated)
-                    self.render(fancy_mode=(render_mode=='fancy'), 
-                    print_auxillary_info=True,
-                    show_agents_obs=_show_agents_obs)
+            if verbosity>1 and _render_state_timeout and  game_iter %_render_state_timeout==0 and _sleep_time>0:
+                time.sleep(_sleep_time)
+                if not _diagnostic_mode:
+                    clear_output()
+                if verbosity>2:
+                    print('action ', self._unflatten_move_action(a)if  0<=a<self.action_space.n else a)
+                    print('reward',  reward)
+                    #print('terminated', terminated)
+                self.render(fancy_mode=(render_mode=='fancy'), 
+                print_auxillary_info=True,
+                show_agents_obs=_show_agents_obs)
         
             if terminated or truncated:
                  break
